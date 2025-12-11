@@ -41,6 +41,12 @@ Thumbs.db
 video/
 *.log
 
+# Large media files
+*.mp4
+*.mov
+*.avi
+*.mkv
+
 # Lock files (uncomment if you don't want to track them)
 # uv.lock
 # poetry.lock

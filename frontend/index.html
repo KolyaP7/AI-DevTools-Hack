@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Праздничное агентство</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        body {
+            background: #000;
+            color: white;
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        h1 {
+            font-size: 3em;
+            margin-top: 50px;
+            text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #fff;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .snow {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            z-index: 9999;
+            animation: fall linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes fall {
+            0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+        
+        .form-container {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            display: inline-block;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 10;
+        }
+        
+        input,
+        button {
+            margin: 15px 0;
+            padding: 12px 20px;
+            font-size: 1em;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            outline: none;
+        }
+        
+        input:focus,
+        button:focus {
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+        }
+        
+        button {
+            cursor: pointer;
+            background: linear-gradient(45deg, #4CAF50, #8BC34A);
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+    </style>
+</head>
+
+<body>
+    <video autoplay muted loop id="bg-video" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1;">
+        <source src="vecteezy_beautiful-christmas-tree-particles-background-video-loop_2014514.mp4" type="video/mp4">
+    </video>
+    <h1>Праздничное агентство</h1>
+
+    <!-- Контейнер для снежинок -->
+    <div id="snowflakes-container"></div>
+
+    <div class="form-container">
+        <h2>Загрузите видео и напишите имя</h2>
+        <form id="videoForm">
+            <input type="file" id="videoFile" accept="video/*" required>
+            <input type="text" id="userName" placeholder="Ваше имя" required>
+            <button type="submit">Отправить</button>
+        </form>
+    </div>
+
+    <script>
+        // Функция создания снежинок
+        function createSnowflakes() {
+            const snowflakesContainer = document.getElementById('snowflakes-container');
+
+            for (let i = 0; i < 100; i++) {
+                const snowflake = document.createElement('div');
+                snowflake.className = 'snow';
+
+                // Случайные параметры для каждой снежинки
+                snowflake.style.left = `${Math.random() * 100}vw`;
+                snowflake.style.animationDuration = `${Math.random() * 10 + 5}s`;
+                snowflake.style.animationDelay = `${Math.random() * 5}s`;
+                snowflake.style.width = `${Math.random() * 8 + 2}px`;
+                snowflake.style.height = snowflake.style.width;
+
+                snowflakesContainer.appendChild(snowflake);
+            }
+        }
+
+        // Инициализация снежинок при загрузке страницы
+        document.addEventListener('DOMContentLoaded', createSnowflakes);
+
+        // Обработка формы загрузки видео
+        document.getElementById('videoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const videoFile = document.getElementById('videoFile').files[0];
+            const userName = document.getElementById('userName').value.trim();
+
+            if (!videoFile) {
+                alert('Пожалуйста, выберите видеофайл.');
+                return;
+            }
+
+            if (!userName) {
+                alert('Пожалуйста, введите ваше имя.');
+                return;
+            }
+
+            // Здесь можно добавить код для отправки данных на сервер
+            alert(`Видео от ${userName} успешно загружено!`);
+        });
+    </script>
+</body>
+
+</html>

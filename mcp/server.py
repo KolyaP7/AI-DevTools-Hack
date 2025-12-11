@@ -20,7 +20,8 @@ from dotenv import load_dotenv, find_dotenv
 # Load environment variables
 load_dotenv(find_dotenv())
 
-from fastmcp import FastMCP, Context
+from mcp.server.fastmcp import FastMCP, Context
+
 from opentelemetry import trace
 
 # Импортируем единый экземпляр FastMCP
@@ -48,8 +49,10 @@ init_tracing()
 # Импортируем инструменты
 try:
     from tools.example_tool import example_tool
+    from tools.get_text_from_video import get_text_from_video
 except ImportError:
     from tools.example_tool import example_tool
+    from tools.get_text_from_video import get_text_from_video
 
 # Добавляем промпты (опционально)
 @mcp.prompt()

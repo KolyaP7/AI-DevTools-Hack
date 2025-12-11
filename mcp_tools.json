@@ -14,6 +14,17 @@
         "description": "Максимальное количество результатов"
       }
     ]
+  },
+  {
+    "name": "get_text_from_video",
+    "description": "📝 Инструмент для получения текста с временными метками из видео.",
+    "args": [
+      {
+        "name": "fileName",
+        "type": "string",
+        "description": "Имя файла видео"
+      }
+    ]
   }
 ]
 

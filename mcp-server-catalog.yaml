@@ -1,0 +1,47 @@
+# Конфигурация MCP сервера
+id: "mcp-server-example"
+name: "MCP Server Example"
+description: |
+  Пример MCP сервера, демонстрирующий стандарт разработки.
+  Включает примеры инструментов с логированием, прогресс-отчетами,
+  OpenTelemetry трейсингом и обработкой ошибок.
+tools:
+  - name: "example_tool"
+    description: "Пример инструмента MCP сервера с полным набором практик"
+    parameters:
+      query: "string - Поисковый запрос для обработки"
+      limit: "integer - Максимальное количество результатов (по умолчанию: 10)"
+rawEnvs:
+  PORT:
+    isRequired: false
+    description: "Порт MCP сервера"
+  HOST:
+    isRequired: false
+    description: "Хост для прослушивания сервера"
+  MCP_SERVER_NAME:
+    isRequired: false
+    description: "Имя MCP сервера"
+  OTEL_ENDPOINT:
+    isRequired: false
+    description: "OpenTelemetry endpoint для экспорта трейсов"
+  OTEL_SERVICE_NAME:
+    isRequired: false
+    description: "Имя сервиса для OpenTelemetry"
+  LOG_LEVEL:
+    isRequired: false
+    description: "Уровень логирования"
+secretEnvs:
+  API_KEY:
+    isRequired: false
+    description: "API ключ для доступа к сервису (если требуется)"
+image_uri: ${IMAGE_URI}
+license_url: "https://example.com/license"
+tags: ["example", "demo", "mcp"]
+category: "Development"
+versions: ["1.0.0"]
+exposed_ports:
+  - port: 8000
+    protocol: "HTTP"
+status: "MCP_SERVER_PREDEFINED_STATUS_AVAILABLE"
+type: "MCP_SERVER_PREDEFINED_TYPE_INTERNAL"
+

@@ -1,0 +1,40 @@
+{
+  "rawEnvs": {
+    "PORT": {
+      "isRequired": false,
+      "description": "Порт MCP сервера",
+      "defaultValue": "8000"
+    },
+    "HOST": {
+      "isRequired": false,
+      "description": "Хост для прослушивания сервера",
+      "defaultValue": "0.0.0.0"
+    },
+    "MCP_SERVER_NAME": {
+      "isRequired": false,
+      "description": "Имя MCP сервера",
+      "defaultValue": "mcp-server"
+    },
+    "OTEL_ENDPOINT": {
+      "isRequired": false,
+      "description": "OpenTelemetry endpoint для экспорта трейсов"
+    },
+    "OTEL_SERVICE_NAME": {
+      "isRequired": false,
+      "description": "Имя сервиса для OpenTelemetry",
+      "defaultValue": "mcp-server"
+    },
+    "LOG_LEVEL": {
+      "isRequired": false,
+      "description": "Уровень логирования",
+      "defaultValue": "INFO"
+    }
+  },
+  "secretEnvs": {
+    "API_KEY": {
+      "isRequired": false,
+      "description": "API ключ для доступа к сервису (если требуется)"
+    }
+  }
+}
+

@@ -51,3 +51,4 @@ video/
 # uv.lock
 # poetry.lock
 # Pipfile.lock
+node_modules

@@ -11,6 +11,10 @@ tools:
     parameters:
       query: "string - Поисковый запрос для обработки"
       limit: "integer - Максимальное количество результатов (по умолчанию: 10)"
+  - name: "get_text_from_video"
+    description: "Инструмент для получения текста с временными метками из видео"
+    parameters:
+      fileName: "string - Имя файла видео"
 rawEnvs:
   PORT:
     isRequired: false

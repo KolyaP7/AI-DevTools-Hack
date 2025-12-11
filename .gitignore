@@ -1,1 +1,47 @@
-/mcp/.env
+# Environment variables
+.env
+*.env
+!*.env.example
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+
+/mcp/__pycache__/
+/mcp/tools/__pycache__/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+video/
+*.log
+
+# Lock files (uncomment if you don't want to track them)
+# uv.lock
+# poetry.lock
+# Pipfile.lock

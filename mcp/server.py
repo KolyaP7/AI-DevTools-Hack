@@ -50,6 +50,19 @@ init_tracing()
 try:
     from tools.example_tool import example_tool
     from tools.get_text_from_video import get_text_from_video
+    from tools.remove_name_from_phrase import remove_name_from_phrase
+    from tools.generate_tts_audio import generate_tts_audio
+    from tools.merge_audio import merge_audio
+    from tools.lip_sync_video import lip_sync_video
+    from tools.combine_video_segments import combine_video_segments
+except ImportError:
+    from tools.example_tool import example_tool
+    from tools.get_text_from_video import get_text_from_video
+    from tools.remove_name_from_phrase import remove_name_from_phrase
+    from tools.generate_tts_audio import generate_tts_audio
+    from tools.merge_audio import merge_audio
+    from tools.lip_sync_video import lip_sync_video
+    from tools.combine_video_segments import combine_video_segments
     from tools.lip_sync_video import lip_sync_video
     from tools.identify_segments_for_replacement import identify_segments_for_replacement
     from tools.generate_tts_audio import generate_tts_audio

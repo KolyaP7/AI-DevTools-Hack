@@ -1,21 +1,5 @@
 [
   {
-    "name": "example_tool",
-    "description": "📝 Пример инструмента MCP сервера. Этот инструмент демонстрирует стандартную структуру и использование всех рекомендуемых практик: логирование через Context, прогресс-отчеты, OpenTelemetry трейсинг и обработку ошибок.",
-    "args": [
-      {
-        "name": "query",
-        "type": "string",
-        "description": "Поисковый запрос для обработки"
-      },
-      {
-        "name": "limit",
-        "type": "integer",
-        "description": "Максимальное количество результатов"
-      }
-    ]
-  },
-  {
     "name": "get_text_from_video",
     "description": "📝 Инструмент для получения текста с временными метками из видео.",
     "args": [
@@ -23,6 +7,64 @@
         "name": "fileName",
         "type": "string",
         "description": "Имя файла видео"
+      }
+    ]
+  },
+  {
+    "name": "generate_tts_audio",
+    "description": "🔊 Инструмент для генерации TTS аудио с использованием FastSpeech 2 + Vocoder.",
+    "args": [
+      {
+        "name": "text",
+        "type": "string",
+        "description": "Текст для озвучивания"
+      },
+      {
+        "name": "output_file",
+        "type": "string",
+        "description": "Имя выходного аудиофайла"
+      },
+      {
+        "name": "segments",
+        "type": "array",
+        "description": "Сегменты с временными метками для генерации в нужные моменты (опционально)"
+      }
+    ]
+  },
+  {
+    "name": "replace_video_segments",
+    "description": "🎬 Инструмент для замены сегментов в видео на отредактированные куски с использованием ffmpeg.",
+    "args": [
+      {
+        "name": "original_video",
+        "type": "string",
+        "description": "Имя оригинального видеофайла"
+      },
+      {
+        "name": "segments",
+        "type": "array",
+        "description": "Список сегментов для замены: [{'start': float, 'end': float, 'replacement_video': str}]"
+      },
+      {
+        "name": "output_video",
+        "type": "string",
+        "description": "Имя выходного видеофайла"
+      }
+    ]
+  },
+  {
+    "name": "cut_and_overlay_lips",
+    "description": "🎬 Инструмент для вырезания сегментов из видео и наложения губ (lip-sync) на каждый сегмент с использованием Wav2Lip.",
+    "args": [
+      {
+        "name": "video_file",
+        "type": "string",
+        "description": "Имя исходного видеофайла (в VIDEO_PATH)"
+      },
+      {
+        "name": "segments",
+        "type": "array",
+        "description": "Список сегментов: [{start: float, end: float, audio_name: str}]"
       }
     ]
   }

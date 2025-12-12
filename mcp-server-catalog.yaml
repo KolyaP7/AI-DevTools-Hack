@@ -6,15 +6,27 @@ description: |
   Включает примеры инструментов с логированием, прогресс-отчетами,
   OpenTelemetry трейсингом и обработкой ошибок.
 tools:
-  - name: "example_tool"
-    description: "Пример инструмента MCP сервера с полным набором практик"
-    parameters:
-      query: "string - Поисковый запрос для обработки"
-      limit: "integer - Максимальное количество результатов (по умолчанию: 10)"
   - name: "get_text_from_video"
-    description: "Инструмент для получения текста с временными метками из видео"
+    description: "📝 Инструмент для получения текста с временными метками из видео"
     parameters:
       fileName: "string - Имя файла видео"
+  - name: "generate_tts_audio"
+    description: "🔊 Инструмент для генерации TTS аудио с использованием FastSpeech 2 + Vocoder"
+    parameters:
+      text: "string - Текст для озвучивания"
+      output_file: "string - Имя выходного аудиофайла"
+      segments: "array (optional) - Сегменты с временными метками для генерации в нужные моменты"
+  - name: "replace_video_segments"
+    description: "🎬 Инструмент для замены сегментов в видео на отредактированные куски с использованием ffmpeg"
+    parameters:
+      original_video: "string - Имя оригинального видеофайла"
+      segments: "array - [{start: float, end: float, replacement_video: str}]"
+      output_video: "string - Имя выходного видеофайла"
+  - name: "cut_and_overlay_lips"
+    description: "🎬 Инструмент для вырезания сегментов из видео и наложения губ (lip-sync) на каждый сегмент с использованием Wav2Lip"
+    parameters:
+      video_file: "string - Имя исходного видеофайла (в VIDEO_PATH)"
+      segments: "array - [{start: float, end: float, audio_name: str}]"
 rawEnvs:
   PORT:
     isRequired: false

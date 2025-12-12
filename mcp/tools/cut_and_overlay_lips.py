@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import json
 from typing import Dict, Any, List
 
 from fastmcp import Context
@@ -9,11 +10,30 @@ from mcp.types import TextContent
 from opentelemetry import trace
 from pydantic import Field
 
+from globals import WAV2LIB_PATH
 from mcp_instance import mcp
 from tools.utils import ToolResult, _require_env_vars, format_api_error
+
+from funcs.video import cut_video, get_audio_duration, change_video_speed
 from globals import VIDEO_PATH
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
+
+import ffmpeg
+
+def ensure_wav(audio_path: str) -> str:
+    """Конвертирует любой аудио файл в WAV 16kHz, моно, для Wav2Lip"""
+    base, _ = os.path.splitext(audio_path)
+    wav_path = f"{base}.wav"
+    if not os.path.exists(wav_path):
+        (
+            ffmpeg
+            .input(audio_path)
+            .output(wav_path, ar=16000, ac=1)
+            .overwrite_output()
+            .run(quiet=True)
+        )
+    return wav_path
 
 
 @mcp.tool(
@@ -22,124 +42,104 @@ tracer = trace.get_tracer(__name__)
     """
 )
 async def cut_and_overlay_lips(
-    video_file: str = Field(
-        ...,
-        description="Имя входного видеофайла"
-    ),
-    audio_file: str = Field(
-        ...,
-        description="Имя аудиофайла для синхронизации"
-    ),
-    segments: List[Dict[str, Any]] = Field(
-        ...,
-        description="Список сегментов: [{'start': float, 'end': float, 'output_name': str}]"
-    ),
+    video_file: str = Field(...),
+    segments: List[Dict[str, Any]] = Field(...),
     ctx: Context = None
 ) -> ToolResult:
-    """
-    Вырезает сегменты из видео и применяет lip-sync к каждому сегменту.
 
-    Использует ffmpeg для вырезания сегментов и Wav2Lip для синхронизации губ.
-
-    Args:
-        video_file: Входной видеофайл
-        audio_file: Аудиофайл для синхронизации
-        segments: Список сегментов с start, end, output_name
-
-    Returns:
-        ToolResult с информацией о обработанных сегментах.
-
-    Examples:
-        >>> segments = [{"start": 0, "end": 5, "output_name": "synced_0_5.mp4"}]
-        >>> result = await cut_and_overlay_lips(video_file="input.mp4", audio_file="speech.wav", segments=segments, ctx)
-    """
     with tracer.start_as_current_span("cut_and_overlay_lips") as span:
-        span.set_attribute("video_file", video_file)
-        span.set_attribute("audio_file", audio_file)
-
         await ctx.info("🚀 cut_and_overlay_lips started")
         await ctx.report_progress(progress=0, total=100)
 
         try:
             video_path = os.path.join(VIDEO_PATH, video_file)
-            audio_path = os.path.join(VIDEO_PATH, audio_file)
+            checkpoint_path = os.path.join(WAV2LIB_PATH, "checkpoints", "wav2lip_gan.pth")
 
-            # Проверка существования файлов
-            if not os.path.exists(video_path):
-                raise FileNotFoundError(f"Video file not found: {video_path}")
-            if not os.path.exists(audio_path):
-                raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            output_files = []
 
-            synced_segments = []
+            # Убеждаемся, что директория VIDEO_PATH существует
+            os.makedirs(VIDEO_PATH, exist_ok=True)
 
-            total_segments = len(segments)
             for i, seg in enumerate(segments):
+                await ctx.info(f"▶ Segment {i}: {seg['start']}–{seg['end']}")
+
                 start = seg["start"]
                 end = seg["end"]
-                output_name = seg.get("output_name", f"synced_{start}_{end}.mp4")
-                output_path = os.path.join(VIDEO_PATH, output_name)
+                audio_name = seg["audio_name"]
 
-                # Вырезать сегмент видео
-                temp_video = os.path.join(VIDEO_PATH, f"temp_segment_{i}.mp4")
-                cmd_cut = [
-                    "ffmpeg", "-i", video_path, "-ss", str(start), "-t", str(end - start),
-                    "-c", "copy", temp_video
+                raw_seg_path = os.path.join(VIDEO_PATH, f"{video_file}_segment_{i}.mp4")
+                adjusted_seg_path = os.path.join(VIDEO_PATH, f"{video_file}_segment_{i}_adjusted.mp4")
+                result_path = os.path.join(VIDEO_PATH, f"{video_file}_segment_{i}_result.mp4")
+                audio_path = ensure_wav(os.path.join(VIDEO_PATH, audio_name))
+                
+                # Убеждаемся, что директория для result_path существует
+                result_dir = os.path.dirname(result_path)
+                if result_dir:
+                    os.makedirs(result_dir, exist_ok=True)
+
+
+                # --- 1. Вырезаем отрезок -------------------------------------
+                cut_video(video_path, raw_seg_path, start, end)
+
+                # --- 2. Синхронизируем длительность -------------------------
+                audio_duration = get_audio_duration(audio_path)
+                change_video_speed(
+                    raw_seg_path,
+                    adjusted_seg_path,
+                    end - start,
+                    audio_duration
+                )
+
+                # --- 3. Запускаем Wav2Lip на adjusted_seg_path --------------
+                # Используем абсолютные пути для надежности
+                abs_result_path = os.path.abspath(result_path)
+                abs_adjusted_seg_path = os.path.abspath(adjusted_seg_path)
+                abs_audio_path = os.path.abspath(audio_path)
+                abs_checkpoint_path = os.path.abspath(checkpoint_path)
+                
+                wav2lip_cmd = [
+                    "python",
+                    f"{WAV2LIB_PATH}/inference.py",
+                    "--checkpoint_path", abs_checkpoint_path,
+                    "--face", abs_adjusted_seg_path,
+                    "--audio", abs_audio_path,
+                    "--outfile", abs_result_path,
                 ]
-                subprocess.run(cmd_cut, check=True)
 
-                # Вырезать соответствующий сегмент аудио
-                temp_audio = os.path.join(VIDEO_PATH, f"temp_audio_{i}.wav")
-                cmd_cut_audio = [
-                    "ffmpeg", "-i", audio_path, "-ss", str(start), "-t", str(end - start),
-                    "-acodec", "pcm_s16le", "-ar", "16000", temp_audio
-                ]
-                subprocess.run(cmd_cut_audio, check=True)
+                proc = subprocess.run(
+                    wav2lip_cmd,
+                    capture_output=True,
+                    text=True,
+                    cwd=WAV2LIB_PATH  # Запускаем из директории wav2lib для корректных относительных путей
+                )
 
-                # Запуск Wav2Lip
-                cmd_wav2lip = [
-                    "python", "inference.py",  # Путь к inference.py Wav2Lip
-                    "--checkpoint_path", "wav2lip.pth",  # Путь к модели
-                    "--face", temp_video,
-                    "--audio", temp_audio,
-                    "--outfile", output_path
-                ]
+                if proc.returncode != 0:
+                    raise RuntimeError(
+                        f"Wav2Lip failed for segment {i}:\n"
+                        f"STDOUT:\n{proc.stdout}\n"
+                        f"STDERR:\n{proc.stderr}"
+                    )
 
-                subprocess.run(cmd_wav2lip, check=True, cwd="/path/to/wav2lip")  # Указать путь к Wav2Lip
+                # Проверяем, что файл действительно создан
+                if not os.path.exists(abs_result_path):
+                    raise RuntimeError(
+                        f"Wav2Lip completed but output file not found: {abs_result_path}\n"
+                        f"STDOUT:\n{proc.stdout}\n"
+                        f"STDERR:\n{proc.stderr}"
+                    )
 
-                # Очистка временных файлов
-                os.remove(temp_video)
-                os.remove(temp_audio)
+                output_files.append(abs_result_path)
 
-                synced_segments.append({
-                    "start": start,
-                    "end": end,
-                    "output_file": output_name
-                })
-
-                progress = int((i + 1) / total_segments * 100)
-                await ctx.report_progress(progress=progress, total=100)
-
-            result = {
-                "video_file": video_file,
-                "audio_file": audio_file,
-                "synced_segments": synced_segments,
-                "total_segments": len(synced_segments),
-                "status": "success"
-            }
+            await ctx.report_progress(progress=100, total=100)
 
             return ToolResult(
-                content=[TextContent(type="text", text=f"Cut and overlaid lips on {len(synced_segments)} segments")],
-                structured_content=result,
-                meta={"video_file": video_file, "audio_file": audio_file}
+                content=[TextContent(type="text", text=f"Processed {len(output_files)} segments")],
+                structured_content={"output_files": output_files},
             )
-        except Exception as e:
-            span.set_attribute("error", str(e))
-            await ctx.error(f"❌ Ошибка выполнения: {e}")
 
+        except Exception as e:
+            await ctx.error(f"❌ Ошибка выполнения: {e}")
             from mcp.shared.exceptions import McpError, ErrorData
             raise McpError(
-                ErrorData(
-                    code=-32603,
-                    message=f"Не удалось выполнить операцию: {e}"
-                )
+                ErrorData(code=-32603, message=f"Не удалось выполнить операцию: {e}")
             )

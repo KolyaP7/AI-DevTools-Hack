@@ -7,4 +7,4 @@ MCP_SERVER_NAME = os.getenv("MCP_SERVER_NAME", "mcp-server")
 
 
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "tiny")
-VIDEO_PATH = os.getenv("VIDEO_PATH", "/home/sham/Documents/codeMariners/cloudru/test/AI-DevTools-Hack/video")
+VIDEO_PATH = os.getenv("VIDEO_PATH", os.path.join(os.path.dirname(__file__), "..", "videos"))

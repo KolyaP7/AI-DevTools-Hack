@@ -13,14 +13,11 @@ from tools.utils import ToolResult
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
 
-# Импорт для TTS (предполагаем наличие библиотек)
+# Импорт для TTS
 try:
-    # Пример импортов, нужно установить соответствующие библиотеки
-    # from TTS.api import TTS
-    # или другие
-    pass
+    import pyttsx3
 except ImportError:
-    pass
+    pyttsx3 = None
 
 
 @mcp.tool(
@@ -68,23 +65,23 @@ async def generate_tts_audio(
             from globals import VIDEO_PATH  # Предполагаем наличие
             output_path = os.path.join(VIDEO_PATH, output_file)
 
-            # Здесь должна быть реализация TTS
-            # Пример с использованием TTS library (нужно установить)
-            # tts = TTS(model_name="tts_models/en/ljspeech/fast_pitch", progress_bar=False)
-            # tts.tts_to_file(text=text, file_path=output_path)
+            if pyttsx3 is None:
+                raise ImportError("pyttsx3 not installed")
 
-            # Заглушка для демонстрации
+            # Используем pyttsx3 для генерации TTS
+            engine = pyttsx3.init()
+
+            # Настройка голоса (опционально)
+            voices = engine.getProperty('voices')
+            if voices:
+                # Выбираем первый доступный голос
+                engine.setProperty('voice', voices[0].id)
+
             await ctx.report_progress(progress=50, total=100)
 
-            # Если segments указаны, можно генерировать аудио для каждого сегмента
-            if segments:
-                # Логика для генерации в нужные моменты
-                # Например, создать композитный аудио файл
-                pass
-
-            # Имитация генерации
-            with open(output_path, 'w') as f:
-                f.write(f"# TTS audio for: {text}\n")  # Заглушка
+            # Генерируем аудио
+            engine.save_to_file(text, output_path)
+            engine.runAndWait()
 
             result = {
                 "output_file": output_file,

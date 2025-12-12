@@ -1,6 +1,7 @@
 """Инструмент для получения текста с временными меткамииз видео."""
 
 import os
+import json
 from typing import Dict, Any
 
 import whisper

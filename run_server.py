@@ -11,6 +11,6 @@ if str(project_root) not in sys.path:
 
 # Запускаем сервер
 if __name__ == "__main__":
-    from mcp.server import main
-    main()
+    import mcp.server
+    mcp.server.main()
 

@@ -10,8 +10,15 @@ from mcp.types import TextContent
 from opentelemetry import trace
 from pydantic import Field
 
-from ..mcp_instance import mcp
-from .utils import ToolResult
+# Импорты с обработкой разных контекстов выполнения
+try:
+    # Относительные импорты (когда файл импортируется как модуль)
+    from ..mcp_instance import mcp
+    from .utils import ToolResult
+except ImportError:
+    # Абсолютные импорты (когда файл запускается напрямую или через server.py)
+    from mcp_instance import mcp
+    from tools.utils import ToolResult
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
 
@@ -72,7 +79,11 @@ async def replace_video_segments(
         await ctx.report_progress(progress=0, total=100)
 
         try:
-            from ..globals import VIDEO_PATH
+            # Импорт с обработкой разных контекстов выполнения
+            try:
+                from ..globals import VIDEO_PATH
+            except ImportError:
+                from globals import VIDEO_PATH
             original_path = os.path.join(VIDEO_PATH, original_video)
             output_path = os.path.join(VIDEO_PATH, output_video)
 

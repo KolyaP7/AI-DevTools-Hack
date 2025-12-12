@@ -3,21 +3,35 @@
 import json
 import sys
 from typing import Dict, Any
-
+import os
 import httpx
+from dotenv import load_dotenv, find_dotenv
 from fastmcp import Context
 from mcp.types import TextContent
 from opentelemetry import trace
 from pydantic import Field
 
-from ..mcp_instance import mcp
-from .utils import ToolResult
+# Загружаем переменные окружения из .env
+load_dotenv(find_dotenv())
+
+# Импорты с обработкой разных контекстов выполнения
+try:
+    # Относительные импорты (когда файл импортируется как модуль)
+    from ..mcp_instance import mcp
+    from .utils import ToolResult
+    from ..globals import OPENAI_API_KEY, OPENAI_BASE_URL, GIGACHAT_MODEL
+except ImportError:
+    # Абсолютные импорты (когда файл запускается напрямую или через server.py)
+    from mcp_instance import mcp
+    from tools.utils import ToolResult
+    from globals import OPENAI_API_KEY, OPENAI_BASE_URL, GIGACHAT_MODEL
+
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
 
 # LLM конфигурация
-api_key = "ZjJkZTE0MTEtNDk2NC00NjBlLTkyNWItOTQ1NjllNDhlNDAz.e7bfa0c5e301eb8e85256aeb4c12da27"
-url = "https://foundation-models.api.cloud.ru/v1"
+api_key = OPENAI_API_KEY
+url = OPENAI_BASE_URL
 
 try:
     from openai import OpenAI
@@ -90,7 +104,7 @@ async def analyze_and_replace_name(
                 print("🔧 Нормализую текст...", file=sys.stderr)
 
             normalize_response = client.chat.completions.create(
-                model="ai-sage/GigaChat3-10B-A1.8B",
+                model=GIGACHAT_MODEL,
                 max_tokens=2000,
                 temperature=0.1,  # Низкая температура для точности
                 messages=[{"role": "user", "content": normalize_prompt}]
@@ -135,7 +149,7 @@ async def analyze_and_replace_name(
             # Вызываем LLM
             try:
                 response = client.chat.completions.create(
-                    model="ai-sage/GigaChat3-10B-A1.8B",
+                    model=GIGACHAT_MODEL,
                     max_tokens=2000,
                     temperature=0.3,  # Низкая температура для точности
                     presence_penalty=0,

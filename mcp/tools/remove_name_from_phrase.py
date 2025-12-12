@@ -7,8 +7,15 @@ from mcp.types import TextContent
 from opentelemetry import trace
 from pydantic import Field
 
-from ..mcp_instance import mcp
-from .utils import ToolResult
+# Импорты с обработкой разных контекстов выполнения
+try:
+    # Относительные импорты (когда файл импортируется как модуль)
+    from ..mcp_instance import mcp
+    from .utils import ToolResult
+except ImportError:
+    # Абсолютные импорты (когда файл запускается напрямую или через server.py)
+    from mcp_instance import mcp
+    from tools.utils import ToolResult
 
 tracer = trace.get_tracer(__name__)
 

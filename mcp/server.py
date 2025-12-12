@@ -47,12 +47,11 @@ def init_tracing():
 init_tracing()
 
 # Импортируем инструменты
-try:
-    from tools.example_tool import example_tool
-    from tools.get_text_from_video import get_text_from_video
-except ImportError:
-    from tools.example_tool import example_tool
-    from tools.get_text_from_video import get_text_from_video
+from tools.example_tool import example_tool
+from tools.get_text_from_video import get_text_from_video
+from tools.generate_tts_audio import generate_tts_audio
+from tools.lip_sync_video import lip_sync_video
+from tools.replace_video_segments import replace_video_segments
 
 # Добавляем промпты (опционально)
 @mcp.prompt()

@@ -4,6 +4,7 @@ import os
 from typing import Dict, Any
 
 import whisper
+import json
 
 import httpx
 from fastmcp import Context
@@ -73,11 +74,11 @@ async def get_text_from_video(
             model = whisper.load_model(WHISPER_MODEL)
             print("done")
             print("transcribing...", end="")
-            result = model.transcribe(os.path.join(VIDEO_PATH, fileName))
+            transcribed_result = model.transcribe(os.path.join(VIDEO_PATH, fileName))
             print("done")
 
             result = []
-            for i in result["segments"]:
+            for i in transcribed_result["segments"]:
                 result.append({
                     "text": i["text"],
                     "start": i["start"],
@@ -88,12 +89,12 @@ async def get_text_from_video(
 
 
 
-            json_result = json.dumps(result)
+            json_result = json.dumps(result, ensure_ascii=False)
 
 
             return ToolResult(
                 content=[TextContent(type="text", text=json_result)],
-                structured_content=result,
+                structured_content={"result": result},
                 meta={"fileName": fileName}
             )
         except Exception as e:

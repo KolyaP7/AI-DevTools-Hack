@@ -117,6 +117,13 @@
             <input type="text" id="userName" placeholder="Ваше имя" required>
             <button type="submit">Отправить</button>
         </form>
+        <div id="result" style="display: none; margin-top: 20px;">
+            <h3>Обработанное видео:</h3>
+            <video id="processedVideo" controls preload="metadata" style="max-width: 100%; min-height: 200px; border: 1px solid #ccc; background: #000;"></video>
+            <br>
+            <button id="downloadBtn" style="margin-top: 10px;">Скачать видео</button>
+            <div id="debugInfo" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+        </div>
     </div>
 
     <script>
@@ -143,7 +150,7 @@
         document.addEventListener('DOMContentLoaded', createSnowflakes);
 
         // Обработка формы загрузки видео
-        document.getElementById('videoForm').addEventListener('submit', function(e) {
+        document.getElementById('videoForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const videoFile = document.getElementById('videoFile').files[0];
@@ -159,8 +166,105 @@
                 return;
             }
 
-            // Здесь можно добавить код для отправки данных на сервер
-            alert(`Видео от ${userName} успешно загружено!`);
+            // Показать индикатор загрузки
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Обработка...';
+            submitBtn.disabled = true;
+
+            // Остановить фоновое видео для экономии ресурсов
+            const bgVideo = document.getElementById('bg-video');
+            if (bgVideo) {
+                bgVideo.pause();
+            }
+
+            try {
+                // Отправка данных на сервер
+                const formData = new FormData();
+                formData.append('video', videoFile);
+                formData.append('name', userName);
+
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Показать обработанное видео
+                    const resultDiv = document.getElementById('result');
+                    const videoElement = document.getElementById('processedVideo');
+                    const downloadBtn = document.getElementById('downloadBtn');
+
+                    // Clear any existing video
+                    videoElement.src = '';
+                    videoElement.load();
+
+                    const videoUrl = `/videos/${result.processed_video}`;
+                    console.log('Setting video source to:', videoUrl);
+                    console.log('Full result:', result);
+
+                    const debugInfo = document.getElementById('debugInfo');
+                    debugInfo.innerHTML = `
+                        <strong>Debug Info:</strong><br>
+                        Video URL: ${videoUrl}<br>
+                        Processed video: ${result.processed_video}<br>
+                        Message: ${result.message}
+                    `;
+
+                    videoElement.src = videoUrl;
+                    videoElement.load(); // Force reload
+
+                    // Add event listeners for debugging
+                    videoElement.addEventListener('loadstart', () => {
+                        console.log('Video load started');
+                        debugInfo.innerHTML += '<br>Status: Loading started';
+                    });
+                    videoElement.addEventListener('loadeddata', () => {
+                        console.log('Video data loaded');
+                        debugInfo.innerHTML += '<br>Status: Data loaded';
+                    });
+                    videoElement.addEventListener('error', (e) => {
+                        console.error('Video error:', e);
+                        debugInfo.innerHTML += `<br>Status: Error - ${e.target.error ? e.target.error.code : 'Unknown error'}`;
+                    });
+                    videoElement.addEventListener('canplay', () => {
+                        console.log('Video can play');
+                        debugInfo.innerHTML += '<br>Status: Can play';
+                    });
+                    videoElement.addEventListener('abort', () => {
+                        console.log('Video load aborted');
+                        debugInfo.innerHTML += '<br>Status: Load aborted';
+                    });
+                    videoElement.addEventListener('stalled', () => {
+                        console.log('Video stalled');
+                        debugInfo.innerHTML += '<br>Status: Stalled';
+                    });
+
+                    downloadBtn.onclick = () => {
+                        const a = document.createElement('a');
+                        a.href = videoUrl;
+                        a.download = result.processed_video;
+                        a.click();
+                    };
+
+                    resultDiv.style.display = 'block';
+                    alert(result.message);
+                } else {
+                    alert('Ошибка обработки видео: ' + result.message);
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            } finally {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+                // Возобновить фоновое видео
+                const bgVideo = document.getElementById('bg-video');
+                if (bgVideo) {
+                    bgVideo.play();
+                }
+            }
         });
     </script>
 </body>

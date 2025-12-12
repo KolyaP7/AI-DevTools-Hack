@@ -27,25 +27,28 @@ api_key = "ZjJkZTE0MTEtNDk2NC00NjBlLTkyNWItOTQ1NjllNDhlNDAz.e7bfa0c5e301eb8e8525
 url = "https://foundation-models.api.cloud.ru/v1"
 client = OpenAI(api_key=api_key, base_url=url)
 
-# MCP Server configuration
-MCP_BASE_URL = "http://localhost:8000/mcp"
+# Импортируем MCP stdio клиент
+try:
+    from mcp_stdio_client import get_mcp_client, close_mcp_client
+except ImportError:
+    from LLM.mcp_stdio_client import get_mcp_client, close_mcp_client
 
 class VideoNameReplacer:
     """Система замены имен в видео с помощью LLM и MCP tools."""
-    
+
     def __init__(self):
-        self.mcp_client = httpx.AsyncClient()
+        self.mcp_client = None
         
+    async def ensure_mcp_client(self):
+        """Убеждается, что MCP клиент инициализирован."""
+        if self.mcp_client is None:
+            self.mcp_client = await get_mcp_client()
+
     async def call_mcp_tool(self, tool_name: str, **params) -> Dict[str, Any]:
-        """Вызывает MCP tool через HTTP API."""
+        """Вызывает MCP tool через stdio."""
         try:
-            response = await self.mcp_client.post(
-                f"{MCP_BASE_URL}/tools/{tool_name}",
-                json=params,
-                timeout=60.0
-            )
-            response.raise_for_status()
-            return response.json()
+            await self.ensure_mcp_client()
+            return await self.mcp_client.call_tool(tool_name, **params)
         except Exception as e:
             print(f"Ошибка вызова {tool_name}: {e}")
             return {"error": str(e)}
@@ -55,12 +58,25 @@ class VideoNameReplacer:
         result = await self.call_mcp_tool("get_text_from_video", fileName=video_file)
         if "error" in result:
             raise Exception(f"Ошибка получения текста: {result['error']}")
-        
-        # Извлекаем segments из результата
+
+        # Извлекаем segments из structuredContent (с заглавной буквы)
+        structured_content = result.get("structuredContent", {}).get("structured_content", {})
+        if "segments" in structured_content:
+            segments = structured_content["segments"]
+            # Убеждаемся, что это список
+            if isinstance(segments, list):
+                return segments
+            elif isinstance(segments, str):
+                return json.loads(segments)
+
+        # Fallback: извлекаем из content
         content = result.get("content", [])
         if content and len(content) > 0:
             text_content = content[0].get("text", "[]")
-            return json.loads(text_content)
+            try:
+                return json.loads(text_content)
+            except json.JSONDecodeError:
+                return []
         return []
     
     def find_phrases_with_name(self, segments: List[Dict[str, Any]], target_name: str) -> List[Dict[str, Any]]:
@@ -178,25 +194,16 @@ class VideoNameReplacer:
         selector = VideoSelector()
         return selector.find_video_files()
 
-    async def process_video_replacement(self, video_file: str = None, target_name: str = None, 
+    async def process_video_replacement(self, video_file: str = None, target_name: str = None,
                                       output_file: str = "final_output.mp4") -> Dict[str, Any]:
-        """Основной процесс замены имен в видео.
-        
-        Args:
-            video_file: Путь к видео файлу (если None, предложит выбрать интерактивно)
-            target_name: Имя для замены (если None, запросит у пользователя)
-            output_file: Выходной файл
-            
-        Returns:
-            Словарь с результатами обработки
-        """
+        """Основной процесс замены имен в видео с анализом всего текста."""
         # Интерактивный выбор видео файла
         if video_file is None:
             try:
                 video_file = await self.select_video_interactive()
             except Exception as e:
                 return {"status": "error", "message": f"Ошибка выбора видео: {e}"}
-        
+
         # Интерактивный ввод имени для замены
         if target_name is None:
             try:
@@ -206,94 +213,216 @@ class VideoNameReplacer:
                     return {"status": "error", "message": "Имя не может быть пустым"}
             except KeyboardInterrupt:
                 return {"status": "error", "message": "Ввод прерван пользователем"}
-        
+
         print(f"🎬 Начинаю обработку видео {video_file} для замены имени на '{target_name}'")
-        
+
         try:
+            # 0. Извлекаем оригинальное аудио из видео для voice cloning
+            print("\n0️⃣ ИЗВЛЕЧЕНИЕ ОРИГИНАЛЬНОГО АУДИО")
+            print("-" * 35)
+
+            original_audio_filename = f"original_audio_{os.path.splitext(video_file)[0]}.wav"
+            extract_result = await self.call_mcp_tool("extract_audio_from_video",
+                                                    video_file=video_file,
+                                                    output_file=original_audio_filename)
+
+            if "error" in extract_result:
+                print(f"   ❌ Ошибка извлечения аудио: {extract_result['error']}")
+                return {"status": "error", "message": f"Ошибка извлечения аудио: {extract_result['error']}"}
+
+            print(f"   ✅ Оригинальное аудио извлечено: {original_audio_filename}")
+
             # 1. Получаем текст из видео
-            print("1️⃣ Получаю текст из видео...")
+            print("\n1️⃣ ПОЛУЧЕНИЕ ТЕКСТА ИЗ ВИДЕО")
+            print("-" * 30)
             segments = await self.get_text_from_video(video_file)
-            print(f"   Найдено {len(segments)} сегментов")
-            
-            # 2. Находим фразы с целевым именем
-            print("2️⃣ Ищу фразы с целевым именем...")
-            matching_phrases = self.find_phrases_with_name(segments, target_name)
-            print(f"   Найдено {len(matching_phrases)} фраз с именем '{target_name}'")
-            
-            if not matching_phrases:
-                return {"status": "no_matching_names", "message": f"Имя '{target_name}' не найдено в видео"}
-            
-            # 3. Обрабатываем каждую фразу
-            video_segments = []
-            for i, phrase_info in enumerate(matching_phrases):
-                print(f"3.{i+1}️⃣ Обрабатываю фразу {i+1}: '{phrase_info['text']}'")
-                
-                # 3.1. Удаляем имя из фразы
-                print("   3.1. Удаляю имя из фразы...")
-                remove_result = await self.remove_name_from_phrase(
-                    phrase_info["text"], target_name
-                )
-                if "error" in remove_result:
+
+            if not segments:
+                return {"status": "error", "message": "Не удалось извлечь текст из видео"}
+
+            print(f"   📝 Извлечено {len(segments)} сегментов текста")
+
+            # 2. Объединяем весь текст в одну строку
+            print("\n2️⃣ АНАЛИЗ ПОЛНОГО ТЕКСТА")
+            print("-" * 25)
+            full_text = " ".join([segment["text"] for segment in segments])
+            print(f"   📄 Полный текст: '{full_text}'")
+
+            # 3. Анализируем текст и заменяем имя через LLM
+            print("\n3️⃣ ЗАМЕНА ИМЕНИ ВО ВСЕМ ТЕКСТЕ")
+            print("-" * 30)
+            print(f"   🤖 Отправляю запрос на замену имени '{target_name}'...")
+
+            replace_result = await self.call_mcp_tool("analyze_and_replace_name",
+                                                    full_text=full_text,
+                                                    new_name=target_name)
+
+            if "error" in replace_result:
+                print(f"   ❌ Ошибка замены имени: {replace_result['error']}")
+                return {"status": "error", "message": f"Ошибка замены имени: {replace_result['error']}"}
+
+            # Извлекаем замененный текст
+            replaced_text = None
+            if "structuredContent" in replace_result:
+                structured = replace_result["structuredContent"].get("structured_content", {})
+                replaced_text = structured.get("replaced_text")
+            elif "content" in replace_result and replace_result["content"]:
+                replaced_text = replace_result["content"][0].get("text", "")
+
+            if not replaced_text:
+                return {"status": "error", "message": "Не удалось получить замененный текст"}
+
+            print(f"   ✅ Замененный текст: '{replaced_text}'")
+
+            # Выводим полный результат в терминал
+            print("\n" + "="*60)
+            print("🎬 ПОЛНЫЙ ТЕКСТ ВИДЕО ДО И ПОСЛЕ ЗАМЕНЫ:")
+            print("="*60)
+            print(f"📝 ДО:  {full_text}")
+            print(f"🔄 ПОСЛЕ: {replaced_text}")
+            print("="*60)
+
+            # 4. Создаем сегменты с замененным текстом
+            print("\n4️⃣ РАЗБИЕНИЕ НА СЕГМЕНТЫ")
+            print("-" * 20)
+
+            # Простая логика: сохраняем временные метки, но заменяем текст
+            replaced_segments = []
+            replaced_words = replaced_text.split()
+
+            # Распределяем слова по сегментам примерно равномерно
+            total_words = len(replaced_words)
+            words_per_segment = max(1, total_words // len(segments))
+
+            word_idx = 0
+            for i, original_segment in enumerate(segments):
+                # Определяем сколько слов взять для этого сегмента
+                words_for_segment = min(words_per_segment,
+                                      total_words - word_idx)
+
+                if words_for_segment <= 0:
                     continue
-                
-                modified_phrase = remove_result.get("structured_content", {}).get("modified_phrase", phrase_info["text"])
-                
-                # 3.2. Заменяем имя с помощью LLM
-                print("   3.2. Заменяю имя с помощью LLM...")
-                new_phrase = self.use_llm_to_modify_text(
-                    modified_phrase, target_name, target_name
-                )
-                
-                # 3.3. Генерируем TTS аудио
-                print("   3.3. Генерирую TTS аудио...")
-                tts_output = f"tts_{i}.wav"
-                tts_result = await self.generate_tts_audio(new_phrase, tts_output)
-                
-                # 3.4. Объединяем аудио
-                print("   3.4. Объединяю аудио...")
-                merged_audio = f"merged_{i}.wav"
-                merge_result = await self.merge_audio(
-                    original_audio=f"segment_{i}.wav",  # Mock - нужно извлечь оригинальное аудио
-                    tts_audio=tts_output,
-                    name_start=phrase_info["start"],
-                    name_end=phrase_info["end"],
-                    output_file=merged_audio
-                )
-                
-                # 3.5. Синхронизируем губы
-                print("   3.5. Синхронизирую губы...")
-                video_output = f"synced_{i}.mp4"
-                lip_sync_result = await self.lip_sync_video(
-                    video_file=video_file,
-                    audio_file=merged_audio,
-                    output_file=video_output,
-                    start_time=phrase_info["start"],
-                    end_time=phrase_info["end"]
-                )
-                
-                video_segments.append(video_output)
-            
-            # 4. Объединяем все сегменты
-            print("4️⃣ Объединяю все видео сегменты...")
-            final_result = await self.combine_video_segments(video_segments, output_file)
-            
-            print(f"✅ Обработка завершена! Результат: {output_file}")
-            
+
+                segment_text = " ".join(replaced_words[word_idx:word_idx + words_for_segment])
+
+                replaced_segments.append({
+                    "text": segment_text,
+                    "start": original_segment["start"],
+                    "end": original_segment["end"],
+                    "original_text": original_segment["text"]
+                })
+
+                word_idx += words_for_segment
+                print(f"   📝 Сегмент {i+1}: '{segment_text}' ({original_segment['start']}-{original_segment['end']}с)")
+
+            # 5. Генерация TTS для измененных сегментов
+            print("\n5️⃣ ГЕНЕРАЦИЯ TTS ДЛЯ ИЗМЕНЕННЫХ СЕГМЕНТОВ")
+            print("-" * 45)
+
+            processed_segments = []
+            tts_segments_dir = "tts_segments"
+
+            for i, segment in enumerate(replaced_segments):
+                # Проверяем, изменился ли текст сегмента
+                if segment["text"] != segment["original_text"]:
+                    print(f"   🎵 Генерация TTS для сегмента {i+1}: '{segment['text']}'")
+
+                    # Вычисляем длительность сегмента
+                    duration = segment["end"] - segment["start"]
+
+                    # Формируем имя файла для TTS
+                    tts_filename = f"{tts_segments_dir}/tts_segment_{i:03d}_{segment['start']:.1f}s_{segment['end']:.1f}s.wav"
+
+                    # Извлекаем оригинальное аудио из видео для voice cloning
+                    original_audio_filename = f"original_audio_{os.path.splitext(video_file)[0]}.wav"
+
+                    # Вызываем TTS генерацию через MCP с voice cloning
+                    tts_result = await self.call_mcp_tool("generate_tts_audio",
+                                                        text=segment["text"],
+                                                        output_file=tts_filename,
+                                                        original_audio_file=original_audio_filename,
+                                                        start_time=segment["start"],
+                                                        end_time=segment["end"],
+                                                        duration=duration)  # Передаем длительность для контроля скорости речи
+
+                    if "error" in tts_result:
+                        print(f"   ❌ Ошибка генерации TTS для сегмента {i+1}: {tts_result['error']}")
+                        continue
+
+                    print(f"   ✅ TTS сгенерирован: {tts_filename} (длительность: {duration:.1f}с)")
+
+                    processed_segments.append({
+                        "segment_id": i,
+                        "text": segment["text"],
+                        "original_text": segment["original_text"],
+                        "audio_file": tts_filename,
+                        "start": segment["start"],
+                        "end": segment["end"],
+                        "duration": duration,
+                        "changed": True
+                    })
+                else:
+                    print(f"   ⏭️  Сегмент {i+1} не изменился, пропускаем: '{segment['text']}'")
+                    processed_segments.append({
+                        "segment_id": i,
+                        "text": segment["text"],
+                        "original_text": segment["original_text"],
+                        "audio_file": None,  # Без изменений
+                        "start": segment["start"],
+                        "end": segment["end"],
+                        "duration": segment["end"] - segment["start"],
+                        "changed": False
+                    })
+
+            # 6. Создаем финальный результат
+            print("\n6️⃣ СОЗДАНИЕ ФИНАЛЬНОГО РЕЗУЛЬТАТА")
+            print("-" * 35)
+
+            # Создаем подробный отчет
+            result_text = f"🎬 РЕЗУЛЬТАТ ЗАМЕНЫ ИМЕНИ В ВИДЕО\n"
+            result_text += f"📹 Видео файл: {video_file}\n"
+            result_text += f"👤 Новое имя: {target_name}\n\n"
+
+            result_text += f"📝 ИСХОДНЫЙ ТЕКСТ:\n{full_text}\n\n"
+            result_text += f"🔄 ЗАМЕНЕННЫЙ ТЕКСТ:\n{replaced_text}\n\n"
+
+            result_text += f"🎯 ОБРАБОТАННЫЕ СЕГМЕНТЫ:\n"
+            tts_generated = 0
+            for i, segment in enumerate(processed_segments):
+                status = "🔄" if segment.get('changed', False) else "⏭️"
+                audio_info = f" | TTS: {segment['audio_file']}" if segment.get('audio_file') else " | Без изменений"
+                result_text += f"   {i+1}. {status} '{segment['text']}' ({segment['start']:.1f}-{segment['end']:.1f}с){audio_info}\n"
+                if segment.get('changed', False):
+                    tts_generated += 1
+
+            result_text += f"\n📊 СТАТИСТИКА: Сгенерировано TTS сегментов: {tts_generated}/{len(processed_segments)}\n"
+
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(result_text)
+
+            print(f"✅ Результат сохранен в файл: {output_file}")
+
             return {
                 "status": "success",
                 "output_file": output_file,
-                "segments_processed": len(matching_phrases),
-                "video_segments": video_segments,
-                "final_result": final_result
+                "original_text": full_text,
+                "replaced_text": replaced_text,
+                "segments_processed": len(replaced_segments),
+                "processed_segments": processed_segments,
+                "message": f"Успешно заменено имя во всем тексте на '{target_name}' с соблюдением падежных форм"
             }
-            
+
         except Exception as e:
             print(f"❌ Ошибка обработки: {e}")
+            import traceback
+            traceback.print_exc()
             return {"status": "error", "message": str(e)}
     
     async def close(self):
-        """Закрывает HTTP клиент."""
-        await self.mcp_client.aclose()
+        """Закрывает MCP клиент."""
+        if self.mcp_client:
+            await close_mcp_client()
+            self.mcp_client = None
 
 # Основная функция для тестирования
 async def main():

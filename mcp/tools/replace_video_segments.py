@@ -10,9 +10,8 @@ from mcp.types import TextContent
 from opentelemetry import trace
 from pydantic import Field
 
-from mcp_instance import mcp
-from tools.utils import ToolResult
-from funcs.video import cut_video, get_audio_duration, change_video_speed
+from ..mcp_instance import mcp
+from .utils import ToolResult
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
 
@@ -73,7 +72,7 @@ async def replace_video_segments(
         await ctx.report_progress(progress=0, total=100)
 
         try:
-            from globals import VIDEO_PATH
+            from ..globals import VIDEO_PATH
             original_path = os.path.join(VIDEO_PATH, original_video)
             output_path = os.path.join(VIDEO_PATH, output_video)
 
@@ -331,7 +330,7 @@ async def replace_video_segments(
                     abs_path = os.path.abspath(vid)
                     f.write(f"file '{abs_path}'\n")
 
-            # Конкатенация через concat demuxer (более надежно для нормализованных файлов)
+            # Конкатенация
             cmd_concat = [
                 "ffmpeg",
                 "-y",
@@ -346,8 +345,8 @@ async def replace_video_segments(
 
             # Очистка временных файлов
             os.remove(concat_file)
-            for temp_file in temp_files:
-                if os.path.exists(temp_file):
+            for temp_file in concat_list:
+                if temp_file.startswith(os.path.join(VIDEO_PATH, "temp_")):
                     os.remove(temp_file)
 
             result = {

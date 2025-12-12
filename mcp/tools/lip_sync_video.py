@@ -11,7 +11,7 @@ from pydantic import Field
 
 from mcp_instance import mcp
 from tools.utils import ToolResult, _require_env_vars, format_api_error
-from globals import VIDEO_PATH, WAV2LIP_PATH, WAV2LIP_MODEL_PATH
+from globals import VIDEO_PATH
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
 
@@ -98,15 +98,15 @@ async def lip_sync_video(
             # Запуск Wav2Lip
             # Предполагаем, что Wav2Lip установлен и доступен
             cmd_wav2lip = [
-                "python", WAV2LIP_PATH,  # Путь к inference.py Wav2Lip
-                "--checkpoint_path", "WAV2LIP_MODEL_PATH",  # Путь к модели
+                "python", "inference.py",  # Путь к inference.py Wav2Lip
+                "--checkpoint_path", "wav2lip.pth",  # Путь к модели
                 "--face", temp_video,
                 "--audio", audio_path,
                 "--outfile", output_path
             ]
 
             await ctx.report_progress(progress=50, total=100)
-            subprocess.run(cmd_wav2lip, check=True, cwd=WAV2LIP_PATH)  # Указать путь к Wav2Lip
+            subprocess.run(cmd_wav2lip, check=True, cwd="/path/to/wav2lip")  # Указать путь к Wav2Lip
 
             # Очистка временных файлов
             if temp_video != video_path:

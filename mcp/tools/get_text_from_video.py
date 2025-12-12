@@ -1,10 +1,11 @@
 """Инструмент для получения текста с временными меткамииз видео."""
 
+import json
+
 import os
 from typing import Dict, Any
 
 import whisper
-import json
 
 import httpx
 from fastmcp import Context
@@ -74,11 +75,11 @@ async def get_text_from_video(
             model = whisper.load_model(WHISPER_MODEL)
             print("done")
             print("transcribing...", end="")
-            transcribed_result = model.transcribe(os.path.join(VIDEO_PATH, fileName))
+            result = model.transcribe(os.path.join(VIDEO_PATH, fileName))
             print("done")
 
             result = []
-            for i in transcribed_result["segments"]:
+            for i in result["segments"]:
                 result.append({
                     "text": i["text"],
                     "start": i["start"],
@@ -89,12 +90,12 @@ async def get_text_from_video(
 
 
 
-            json_result = json.dumps(result, ensure_ascii=False)
+            json_result = json.dumps(result)
 
 
             return ToolResult(
                 content=[TextContent(type="text", text=json_result)],
-                structured_content={"result": result},
+                structured_content=result,
                 meta={"fileName": fileName}
             )
         except Exception as e:

@@ -1,0 +1,25 @@
+🎬 РЕЗУЛЬТАТ ЗАМЕНЫ ИМЕНИ В ВИДЕО
+📹 Видео файл: IMG_9022.mov
+👤 Новое имя: Алексей
+
+📝 ИСХОДНЫЙ ТЕКСТ:
+С новым годом Иван желаю тебе счастья здоровья и успехов в Новом году Иван
+
+🔄 ЗАМЕНЕННЫЙ ТЕКСТ:
+Error executing tool analyze_and_replace_name: Ошибка при анализе и замене имени: Unexpected error
+
+🎯 ОБРАБОТАННЫЕ СЕГМЕНТЫ:
+   1. 'Error' (1.0-2.5с)
+      Аудио: tts_segment_0.wav
+   2. 'executing' (2.5-3.0с)
+      Аудио: tts_segment_1.wav
+   3. 'tool' (3.5-5.0с)
+      Аудио: tts_segment_2.wav
+   4. 'analyze_and_replace_name:' (5.0-6.0с)
+      Аудио: tts_segment_3.wav
+   5. 'Ошибка' (6.5-8.0с)
+      Аудио: tts_segment_4.wav
+   6. 'при' (8.0-9.5с)
+      Аудио: tts_segment_5.wav
+   7. 'анализе' (10.0-10.5с)
+      Аудио: tts_segment_6.wav

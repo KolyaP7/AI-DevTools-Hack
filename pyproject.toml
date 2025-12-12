@@ -4,9 +4,19 @@ version = "0.1.0"
 description = "MCP server"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp",
+    "mcp>=1.0.0",
+    "fastmcp>=0.2.0",
     "python-dotenv",
     "opentelemetry-api",
+    "httpx>=0.25.0",
+    "openai>=1.0.0",
+    "openai-whisper",
+    "torch",
+    "torchaudio",
+    "pydantic>=2.0.0",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
 ]
 
 [tool.hatch.build.targets.wheel]

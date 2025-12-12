@@ -46,7 +46,7 @@ def init_tracing():
 
 init_tracing()
 
-# Импортируем инструменты
+# Импортируем инструменты (регистрируются через декоратор @mcp.tool)
 try:
     from tools.example_tool import example_tool
     from tools.get_text_from_video import get_text_from_video
@@ -55,27 +55,20 @@ try:
     from tools.merge_audio import merge_audio
     from tools.lip_sync_video import lip_sync_video
     from tools.combine_video_segments import combine_video_segments
-except ImportError:
-    from tools.example_tool import example_tool
-    from tools.get_text_from_video import get_text_from_video
-    from tools.remove_name_from_phrase import remove_name_from_phrase
-    from tools.generate_tts_audio import generate_tts_audio
-    from tools.merge_audio import merge_audio
-    from tools.lip_sync_video import lip_sync_video
-    from tools.combine_video_segments import combine_video_segments
-    from tools.lip_sync_video import lip_sync_video
     from tools.identify_segments_for_replacement import identify_segments_for_replacement
-    from tools.generate_tts_audio import generate_tts_audio
     from tools.replace_video_segments import replace_video_segments
     from tools.cut_and_overlay_lips import cut_and_overlay_lips
 except ImportError:
-    from tools.example_tool import example_tool
-    from tools.get_text_from_video import get_text_from_video
-    from tools.lip_sync_video import lip_sync_video
-    from tools.identify_segments_for_replacement import identify_segments_for_replacement
-    from tools.generate_tts_audio import generate_tts_audio
-    from tools.replace_video_segments import replace_video_segments
-    from tools.cut_and_overlay_lips import cut_and_overlay_lips
+    from mcp.tools.example_tool import example_tool
+    from mcp.tools.get_text_from_video import get_text_from_video
+    from mcp.tools.remove_name_from_phrase import remove_name_from_phrase
+    from mcp.tools.generate_tts_audio import generate_tts_audio
+    from mcp.tools.merge_audio import merge_audio
+    from mcp.tools.lip_sync_video import lip_sync_video
+    from mcp.tools.combine_video_segments import combine_video_segments
+    from mcp.tools.identify_segments_for_replacement import identify_segments_for_replacement
+    from mcp.tools.replace_video_segments import replace_video_segments
+    from mcp.tools.cut_and_overlay_lips import cut_and_overlay_lips
 
 # Добавляем промпты (опционально)
 @mcp.prompt()

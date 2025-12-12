@@ -76,11 +76,11 @@ async def get_text_from_video(
             model = whisper.load_model(WHISPER_MODEL)
             print("done")
             print("transcribing...", end="")
-            result = model.transcribe(os.path.join(VIDEO_PATH, fileName))
+            transcribe_result = model.transcribe(os.path.join(VIDEO_PATH, fileName))
             print("done")
 
             result = []
-            for i in result["segments"]:
+            for i in transcribe_result["segments"]:
                 result.append({
                     "text": i["text"],
                     "start": i["start"],
@@ -96,7 +96,7 @@ async def get_text_from_video(
 
             return ToolResult(
                 content=[TextContent(type="text", text=json_result)],
-                structured_content=result,
+                structured_content={"result":result},
                 meta={"fileName": fileName}
             )
         except Exception as e:

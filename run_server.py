@@ -3,6 +3,10 @@
 
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения
+load_dotenv()
 
 # Добавляем текущую директорию в sys.path
 project_root = Path(__file__).parent

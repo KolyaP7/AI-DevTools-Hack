@@ -7,11 +7,15 @@ import json
 import asyncio
 from typing import Dict, Any, List
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Добавляем корневой каталог проекта в sys.path
 project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+
+# Загружаем переменные окружения
+load_dotenv()
 
 # Импортируем систему выбора видео
 try:
@@ -21,12 +25,12 @@ except ImportError as e:
     VideoSelector = None
 
 # LLM конфигурация
-api_key = "ZjJkZTE0MTEtNDk2NC00NjBlLTkyNWItOTQ1NjllNDhlNDAz.e7bfa0c5e301eb8e85256aeb4c12da27"
+api_key = os.getenv("GIGACHAT_API_KEY")
 url = "https://foundation-models.api.cloud.ru/v1"
 
 try:
     from openai import OpenAI
-    client = OpenAI(api_key=api_key, base_url=url)
+    client = OpenAI(api_key=api_key, base_url=url) if api_key else None
 except ImportError:
     print("⚠️ OpenAI клиент недоступен, будет использован мок")
     client = None

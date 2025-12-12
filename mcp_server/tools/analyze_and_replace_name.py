@@ -1,6 +1,7 @@
 """Инструмент для анализа текста и замены имени с соблюдением падежных форм."""
 
 import json
+import os
 import sys
 from typing import Dict, Any
 
@@ -9,19 +10,23 @@ from fastmcp import Context
 from mcp.types import TextContent
 from opentelemetry import trace
 from pydantic import Field
+from dotenv import load_dotenv
 
 from ..mcp_instance import mcp
 from .utils import ToolResult
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
 
+# Загружаем переменные окружения
+load_dotenv()
+
 # LLM конфигурация
-api_key = "ZjJkZTE0MTEtNDk2NC00NjBlLTkyNWItOTQ1NjllNDhlNDAz.e7bfa0c5e301eb8e85256aeb4c12da27"
+api_key = os.getenv("GIGACHAT_API_KEY")
 url = "https://foundation-models.api.cloud.ru/v1"
 
 try:
     from openai import OpenAI
-    client = OpenAI(api_key=api_key, base_url=url)
+    client = OpenAI(api_key=api_key, base_url=url) if api_key else None
 except ImportError:
     client = None
 

@@ -8,6 +8,7 @@ import httpx
 from typing import Dict, Any, List
 from openai import OpenAI
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Добавляем корневой каталог проекта в sys.path для импорта video_selector
 project_root = Path(__file__).parent.parent
@@ -22,8 +23,14 @@ except ImportError as e:
     print("💡 Убедитесь, что файл video_selector.py находится в корневом каталоге проекта")
     VideoSelector = None
 
+# Загружаем переменные окружения
+load_dotenv()
+
 # Конфигурация LLM
-api_key = "ZjJkZTE0MTEtNDk2NC00NjBlLTkyNWItOTQ1NjllNDhlNDAz.e7bfa0c5e301eb8e85256aeb4c12da27"
+api_key = os.getenv("GIGACHAT_API_KEY")
+if not api_key:
+    raise ValueError("GIGACHAT_API_KEY не найден в переменных окружения. Проверьте файл .env")
+
 url = "https://foundation-models.api.cloud.ru/v1"
 client = OpenAI(api_key=api_key, base_url=url)
 
@@ -282,38 +289,75 @@ class VideoNameReplacer:
             print(f"🔄 ПОСЛЕ: {replaced_text}")
             print("="*60)
 
-            # 4. Создаем сегменты с замененным текстом
-            print("\n4️⃣ РАЗБИЕНИЕ НА СЕГМЕНТЫ")
-            print("-" * 20)
+            # 4. Разбиваем замененный текст на предложения
+            print("\n4️⃣ РАЗБИЕНИЕ НА ПРЕДЛОЖЕНИЯ")
+            print("-" * 25)
 
-            # Простая логика: сохраняем временные метки, но заменяем текст
+            import re
+
+            # Разбиваем текст на предложения
+            # Используем регулярное выражение для разделения по точкам, восклицательным и вопросительным знакам
+            sentence_pattern = r'(?<=[.!?])\s+'
+            replaced_sentences = re.split(sentence_pattern, replaced_text.strip())
+
+            # Очищаем предложения от лишних пробелов
+            replaced_sentences = [s.strip() for s in replaced_sentences if s.strip()]
+
+            print(f"   📝 Разбито на {len(replaced_sentences)} предложений")
+
+            # Создаем сегменты на основе предложений
             replaced_segments = []
-            replaced_words = replaced_text.split()
 
-            # Распределяем слова по сегментам примерно равномерно
-            total_words = len(replaced_words)
-            words_per_segment = max(1, total_words // len(segments))
+            # Распределяем предложения по временным сегментам оригинального видео
+            total_duration = segments[-1]["end"] if segments else 0
+            sentence_duration = total_duration / len(replaced_sentences) if replaced_sentences else 0
 
-            word_idx = 0
-            for i, original_segment in enumerate(segments):
-                # Определяем сколько слов взять для этого сегмента
-                words_for_segment = min(words_per_segment,
-                                      total_words - word_idx)
-
-                if words_for_segment <= 0:
-                    continue
-
-                segment_text = " ".join(replaced_words[word_idx:word_idx + words_for_segment])
+            current_time = 0.0
+            for i, sentence in enumerate(replaced_sentences):
+                start_time = current_time
+                end_time = current_time + sentence_duration if i < len(replaced_sentences) - 1 else total_duration
 
                 replaced_segments.append({
-                    "text": segment_text,
-                    "start": original_segment["start"],
-                    "end": original_segment["end"],
-                    "original_text": original_segment["text"]
+                    "text": sentence,
+                    "start": start_time,
+                    "end": end_time,
+                    "sentence_id": i,
+                    "original_text": ""  # Будет заполнено позже при сравнении
                 })
 
-                word_idx += words_for_segment
-                print(f"   📝 Сегмент {i+1}: '{segment_text}' ({original_segment['start']}-{original_segment['end']}с)")
+                current_time = end_time
+                print(f"   📝 Предложение {i+1}: '{sentence}' ({start_time:.1f}-{end_time:.1f}с)")
+
+            # Теперь сравниваем с оригинальными сегментами, чтобы определить, какие предложения изменились
+            print("\n4️⃣.1️⃣ АНАЛИЗ ИЗМЕНЕНИЙ")
+            print("-" * 20)
+
+            # Объединяем оригинальные сегменты в текст для сравнения
+            original_full_text = " ".join([seg["text"] for seg in segments])
+            original_sentences = re.split(sentence_pattern, original_full_text.strip())
+            original_sentences = [s.strip() for s in original_sentences if s.strip()]
+
+            # Сопоставляем предложения и проверяем изменения
+            for i, segment in enumerate(replaced_segments):
+                # Ищем соответствующее оригинальное предложение
+                original_sentence = ""
+                if i < len(original_sentences):
+                    original_sentence = original_sentences[i]
+
+                segment["original_text"] = original_sentence
+
+                # Проверяем, изменилось ли предложение и содержит ли оно имя
+                has_name = target_name.lower() in segment["text"].lower()
+                changed = segment["text"] != original_sentence
+
+                segment["has_name"] = has_name
+                segment["changed"] = changed
+
+                status = "🔄" if changed else "⏭️"
+                name_status = "👤" if has_name else "📝"
+                print(f"   {status} {name_status} '{segment['text']}'")
+                if changed:
+                    print(f"      Было: '{original_sentence}'")
 
             # 5. Генерация TTS для измененных сегментов
             print("\n5️⃣ ГЕНЕРАЦИЯ TTS ДЛЯ ИЗМЕНЕННЫХ СЕГМЕНТОВ")
@@ -324,9 +368,9 @@ class VideoNameReplacer:
             synced_segments_dir = "synced_segments"
 
             for i, segment in enumerate(replaced_segments):
-                # Проверяем, изменился ли текст сегмента
-                if segment["text"] != segment["original_text"]:
-                    print(f"   🎵 Генерация TTS для сегмента {i+1}: '{segment['text']}'")
+                # Проверяем, изменился ли текст сегмента И содержит ли он имя
+                if segment.get("changed", False) and segment.get("has_name", False):
+                    print(f"   🎵 Генерация TTS для предложения {i+1}: '{segment['text']}' (изменено + содержит имя)")
 
                     # Вычисляем длительность сегмента
                     duration = segment["end"] - segment["start"]
@@ -347,14 +391,27 @@ class VideoNameReplacer:
                                                         duration=duration)  # Передаем длительность для контроля скорости речи
 
                     if "error" in tts_result:
-                        print(f"   ❌ Ошибка генерации TTS для сегмента {i+1}: {tts_result['error']}")
+                        print(f"   ❌ Ошибка генерации TTS для предложения {i+1}: {tts_result['error']}")
+                        processed_segments.append({
+                            "segment_id": i,
+                            "text": segment["text"],
+                            "original_text": segment["original_text"],
+                            "audio_file": None,
+                            "synced_video_file": None,
+                            "start": segment["start"],
+                            "end": segment["end"],
+                            "duration": duration,
+                            "changed": True,
+                            "has_name": True,
+                            "tts_error": str(tts_result['error'])
+                        })
                         continue
 
                     print(f"   ✅ TTS сгенерирован: {tts_filename} (длительность: {duration:.1f}с)")
 
                     # Синхронизация губ с новым аудио
                     synced_video_filename = f"{synced_segments_dir}/synced_segment_{i:03d}_{segment['start']:.1f}s_{segment['end']:.1f}s.mp4"
-                    print(f"   🎬 Синхронизация губ для сегмента {i+1}...")
+                    print(f"   🎬 Синхронизация губ для предложения {i+1}...")
 
                     lip_sync_result = await self.call_mcp_tool("lip_sync_video",
                                                              video_file=video_file,
@@ -364,7 +421,7 @@ class VideoNameReplacer:
                                                              end_time=segment["end"])
 
                     if "error" in lip_sync_result:
-                        print(f"   ❌ Ошибка синхронизации губ для сегмента {i+1}: {lip_sync_result['error']}")
+                        print(f"   ❌ Ошибка синхронизации губ для предложения {i+1}: {lip_sync_result['error']}")
                         # Продолжаем без синхронизации
                         synced_video_filename = None
 
@@ -380,19 +437,36 @@ class VideoNameReplacer:
                         "start": segment["start"],
                         "end": segment["end"],
                         "duration": duration,
-                        "changed": True
+                        "changed": True,
+                        "has_name": True
                     })
-                else:
-                    print(f"   ⏭️  Сегмент {i+1} не изменился, пропускаем: '{segment['text']}'")
+                elif segment.get("changed", False):
+                    print(f"   ⏭️  Предложение {i+1} изменено, но не содержит имя, пропускаем: '{segment['text']}'")
                     processed_segments.append({
                         "segment_id": i,
                         "text": segment["text"],
                         "original_text": segment["original_text"],
-                        "audio_file": None,  # Без изменений
+                        "audio_file": None,
+                        "synced_video_file": None,
                         "start": segment["start"],
                         "end": segment["end"],
                         "duration": segment["end"] - segment["start"],
-                        "changed": False
+                        "changed": True,
+                        "has_name": False
+                    })
+                else:
+                    print(f"   ⏭️  Предложение {i+1} не изменилось, пропускаем: '{segment['text']}'")
+                    processed_segments.append({
+                        "segment_id": i,
+                        "text": segment["text"],
+                        "original_text": segment["original_text"],
+                        "audio_file": None,
+                        "synced_video_file": None,
+                        "start": segment["start"],
+                        "end": segment["end"],
+                        "duration": segment["end"] - segment["start"],
+                        "changed": False,
+                        "has_name": segment.get("has_name", False)
                     })
 
             # 6. Объединение видео сегментов в финальное видео
@@ -408,6 +482,9 @@ class VideoNameReplacer:
                         "end": segment["end"],
                         "replacement_video": segment["synced_video_file"]
                     })
+
+            # Сортируем сегменты по времени начала
+            segments_to_replace.sort(key=lambda x: x["start"])
 
             if segments_to_replace:
                 print(f"   🎬 Заменяем {len(segments_to_replace)} сегментов в оригинальном видео...")
@@ -445,22 +522,30 @@ class VideoNameReplacer:
             result_text += f"📝 ИСХОДНЫЙ ТЕКСТ:\n{full_text}\n\n"
             result_text += f"🔄 ЗАМЕНЕННЫЙ ТЕКСТ:\n{replaced_text}\n\n"
 
-            result_text += f"🎯 ОБРАБОТАННЫЕ СЕГМЕНТЫ:\n"
+            result_text += f"🎯 ОБРАБОТАННЫЕ ПРЕДЛОЖЕНИЯ:\n"
             tts_generated = 0
             lip_sync_done = 0
+            changed_with_name = 0
             for i, segment in enumerate(processed_segments):
                 status = "🔄" if segment.get('changed', False) else "⏭️"
-                audio_info = f" | TTS: {segment['audio_file']}" if segment.get('audio_file') else " | Без изменений"
+                name_status = "👤" if segment.get('has_name', False) else "📝"
+                audio_info = f" | TTS: {segment['audio_file']}" if segment.get('audio_file') else ""
                 video_info = f" | Видео: {segment['synced_video_file']}" if segment.get('synced_video_file') else ""
-                result_text += f"   {i+1}. {status} '{segment['text']}' ({segment['start']:.1f}-{segment['end']:.1f}с){audio_info}{video_info}\n"
-                if segment.get('changed', False):
+                error_info = f" | Ошибка: {segment.get('tts_error', '')}" if segment.get('tts_error') else ""
+                result_text += f"   {i+1}. {status} {name_status} '{segment['text']}' ({segment['start']:.1f}-{segment['end']:.1f}с){audio_info}{video_info}{error_info}\n"
+                if segment.get('changed', False) and segment.get('has_name', False):
+                    changed_with_name += 1
+                if segment.get('audio_file'):
                     tts_generated += 1
                 if segment.get('synced_video_file'):
                     lip_sync_done += 1
 
             result_text += f"\n📊 СТАТИСТИКА:\n"
-            result_text += f"   🎵 Сгенерировано TTS сегментов: {tts_generated}/{len(processed_segments)}\n"
-            result_text += f"   🎬 Синхронизировано видео сегментов: {lip_sync_done}/{len(processed_segments)}\n"
+            result_text += f"   📝 Всего предложений: {len(processed_segments)}\n"
+            result_text += f"   🔄 Измененных предложений: {sum(1 for s in processed_segments if s.get('changed', False))}\n"
+            result_text += f"   👤 Содержат имя: {sum(1 for s in processed_segments if s.get('has_name', False))}\n"
+            result_text += f"   🎵 Сгенерировано TTS (изменено + имя): {tts_generated}\n"
+            result_text += f"   🎬 Синхронизировано видео: {lip_sync_done}\n"
 
             # Сохраняем отчет в текстовый файл
             report_file = f"report_{os.path.splitext(output_file)[0]}.txt"
@@ -476,11 +561,13 @@ class VideoNameReplacer:
                 "report_file": report_file,
                 "original_text": full_text,
                 "replaced_text": replaced_text,
-                "segments_processed": len(replaced_segments),
+                "sentences_processed": len(processed_segments),
                 "processed_segments": processed_segments,
+                "sentences_changed": sum(1 for s in processed_segments if s.get('changed', False)),
+                "sentences_with_name": sum(1 for s in processed_segments if s.get('has_name', False)),
                 "tts_generated": tts_generated,
                 "lip_sync_done": lip_sync_done,
-                "message": f"Успешно заменено имя во всем тексте на '{target_name}' с соблюдением падежных форм. Сгенерировано TTS: {tts_generated}, синхронизировано видео: {lip_sync_done}"
+                "message": f"Успешно заменено имя на '{target_name}' в {tts_generated} предложениях. Синхронизировано видео: {lip_sync_done}"
             }
 
         except Exception as e:
@@ -520,15 +607,11 @@ async def main():
             print("✅ Статус: УСПЕШНО")
             print(f"🎬 Финальное видео: {result.get('output_video')}")
             print(f"📄 Отчет: {result.get('report_file')}")
-            print(f"🔢 Обработано сегментов: {result.get('segments_processed')}")
+            print(f"📝 Обработано предложений: {result.get('sentences_processed')}")
+            print(f"🔄 Измененных предложений: {result.get('sentences_changed', 0)}")
+            print(f"👤 Содержат имя: {result.get('sentences_with_name', 0)}")
             print(f"🎵 Сгенерировано TTS: {result.get('tts_generated', 0)}")
             print(f"🎬 Синхронизировано видео: {result.get('lip_sync_done', 0)}")
-
-            video_segments = result.get("video_segments", [])
-            if video_segments:
-                print(f"🎬 Создано видео сегментов: {len(video_segments)}")
-                for i, segment in enumerate(video_segments, 1):
-                    print(f"   {i}. {segment}")
                     
         elif result.get("status") == "no_matching_names":
             print("⚠️  Статус: ИМЕНА НЕ НАЙДЕНЫ")

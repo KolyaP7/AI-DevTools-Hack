@@ -265,6 +265,7 @@ async def replace_video_segments(
                         duration=start - current_time,
                     )
                     concat_list.append(temp_before)
+                    temp_files.append(temp_before)
 
                 # 2) Подготовка и подгонка replacement под длину сегмента
                 repl_path = os.path.join(VIDEO_PATH, repl)
@@ -282,6 +283,7 @@ async def replace_video_segments(
                         target_length=original_seg_len
                     )
                     repl_normalized = adjusted_repl
+                    temp_files.append(adjusted_repl)
                 else:
                     repl_normalized = repl_path
 
@@ -292,6 +294,7 @@ async def replace_video_segments(
                     dst=prepared_repl
                 )
                 concat_list.append(prepared_repl)
+                temp_files.append(prepared_repl)
 
                 current_time = end
 
@@ -315,20 +318,7 @@ async def replace_video_segments(
                     duration=total_duration - current_time,
                 )
                 concat_list.append(temp_tail)
-            # Остаток видео после последнего сегмента
-            duration_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", original_path]
-            result = subprocess.run(duration_cmd, capture_output=True, text=True, check=True)
-            total_duration = float(result.stdout.strip())
-
-            if current_time < total_duration:
-                temp_end = os.path.join(VIDEO_PATH, f"temp_{current_time}_end.mp4")
-                transcode_segment(
-                    src=original_path,
-                    dst=temp_end,
-                    start=current_time,
-                    duration=total_duration - current_time,
-                )
-                concat_list.append(temp_end)
+                temp_files.append(temp_tail)
 
             await ctx.report_progress(progress=60, total=100)
 
@@ -344,7 +334,7 @@ async def replace_video_segments(
             # Конкатенация
             cmd_concat = [
                 "ffmpeg",
-                "-y",
+                "-y",  # Automatically overwrite output files
                 "-f", "concat",
                 "-safe", "0",
                 "-i", concat_file,
@@ -356,9 +346,12 @@ async def replace_video_segments(
 
             # Очистка временных файлов
             os.remove(concat_file)
-            for temp_file in concat_list:
-                if temp_file.startswith(os.path.join(VIDEO_PATH, "temp_")):
-                    os.remove(temp_file)
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except Exception as e:
+                    print(f"Warning: Could not remove temp file {temp_file}: {e}")
 
             result = {
                 "output_video": output_video,

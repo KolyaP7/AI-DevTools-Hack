@@ -98,18 +98,23 @@ async def lip_sync_video(
                 ]
                 subprocess.run(cmd_cut, check=True)
 
-            # Запуск Wav2Lip
-            # Предполагаем, что Wav2Lip установлен и доступен
-            cmd_wav2lip = [
-                "python", "inference.py",  # Путь к inference.py Wav2Lip
-                "--checkpoint_path", "wav2lip.pth",  # Путь к модели
-                "--face", temp_video,
-                "--audio", audio_path,
-                "--outfile", output_path
+            # Замена аудио в видео сегменте (простая версия без Wav2Lip)
+            # Используем ffmpeg для замены аудио
+            await ctx.report_progress(progress=50, total=100)
+
+            cmd_replace_audio = [
+                "ffmpeg", "-y",
+                "-i", temp_video,  # видео без аудио или с оригинальным
+                "-i", audio_path,  # новый аудио файл
+                "-c:v", "copy",    # копируем видео без перекодирования
+                "-c:a", "aac",     # кодируем аудио в AAC
+                "-map", "0:v:0",   # берем видео из первого входа
+                "-map", "1:a:0",   # берем аудио из второго входа
+                "-shortest",       # заканчиваем по короткому потоку
+                output_path
             ]
 
-            await ctx.report_progress(progress=50, total=100)
-            subprocess.run(cmd_wav2lip, check=True, cwd="/path/to/wav2lip")  # Указать путь к Wav2Lip
+            subprocess.run(cmd_replace_audio, check=True)
 
             # Очистка временных файлов
             if temp_video != video_path:

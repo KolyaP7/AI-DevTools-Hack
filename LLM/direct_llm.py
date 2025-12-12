@@ -7,6 +7,7 @@ import json
 import asyncio
 from typing import Dict, Any, List
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Добавляем корневой каталог проекта в sys.path для импорта
 project_root = Path(__file__).parent.parent
@@ -20,13 +21,16 @@ except ImportError as e:
     print(f"⚠️ Не удалось импортировать video_selector: {e}")
     VideoSelector = None
 
+# Загружаем переменные окружения
+load_dotenv()
+
 # Импортируем MCP функции напрямую
 try:
-    # Добавляем путь к mcp в sys.path
-    mcp_path = project_root / "mcp" / "tools"
+    # Добавляем путь к mcp_server в sys.path
+    mcp_path = project_root / "mcp_server" / "tools"
     if str(mcp_path) not in sys.path:
         sys.path.insert(0, str(mcp_path))
-    
+
     from get_text_from_video import get_text_from_video
     from remove_name_from_phrase import remove_name_from_phrase
     from generate_tts_audio import generate_tts_audio
@@ -37,12 +41,12 @@ except ImportError as e:
     print(f"⚠️ Не удалось импортировать MCP функции: {e}")
 
 # LLM конфигурация
-api_key = "ZjJkZTE0MTEtNDk2NC00NjBlLTkyNWItOTQ1NjllNDhlNDAz.e7bfa0c5e301eb8e85256aeb4c12da27"
+api_key = os.getenv("GIGACHAT_API_KEY")
 url = "https://foundation-models.api.cloud.ru/v1"
 
 try:
     from openai import OpenAI
-    client = OpenAI(api_key=api_key, base_url=url)
+    client = OpenAI(api_key=api_key, base_url=url) if api_key else None
 except ImportError:
     print("⚠️ OpenAI клиент недоступен, будет использован мок")
     client = None

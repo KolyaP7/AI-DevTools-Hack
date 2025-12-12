@@ -78,6 +78,9 @@ async def lip_sync_video(
             audio_path = os.path.join(VIDEO_PATH, audio_file)
             output_path = os.path.join(VIDEO_PATH, output_file)
 
+            # Создаем директорию для выходного файла если она не существует
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
             # Проверка существования файлов
             if not os.path.exists(video_path):
                 raise FileNotFoundError(f"Video file not found: {video_path}")

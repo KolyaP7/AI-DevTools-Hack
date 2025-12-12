@@ -1,6 +1,6 @@
 """Единый экземпляр FastMCP для всего приложения."""
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 
 try:

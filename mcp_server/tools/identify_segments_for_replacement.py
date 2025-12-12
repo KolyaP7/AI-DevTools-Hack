@@ -8,8 +8,8 @@ from mcp.types import TextContent
 from opentelemetry import trace
 from pydantic import Field
 
-from mcp.mcp_instance import mcp
-from mcp.tools.utils import ToolResult
+from mcp_server.mcp_instance import mcp
+from mcp_server.tools.utils import ToolResult
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
 

@@ -233,6 +233,9 @@ async def generate_tts_audio(
             from ..globals import VIDEO_PATH
             output_path = os.path.join(VIDEO_PATH, output_file)
 
+            # Создаем директорию если она не существует
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
             # Вычисляем длительность если не указана
             if duration is None and start_time is not None and end_time is not None:
                 duration = end_time - start_time

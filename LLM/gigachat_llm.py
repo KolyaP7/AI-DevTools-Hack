@@ -321,6 +321,7 @@ class VideoNameReplacer:
 
             processed_segments = []
             tts_segments_dir = "tts_segments"
+            synced_segments_dir = "synced_segments"
 
             for i, segment in enumerate(replaced_segments):
                 # Проверяем, изменился ли текст сегмента
@@ -351,11 +352,31 @@ class VideoNameReplacer:
 
                     print(f"   ✅ TTS сгенерирован: {tts_filename} (длительность: {duration:.1f}с)")
 
+                    # Синхронизация губ с новым аудио
+                    synced_video_filename = f"{synced_segments_dir}/synced_segment_{i:03d}_{segment['start']:.1f}s_{segment['end']:.1f}s.mp4"
+                    print(f"   🎬 Синхронизация губ для сегмента {i+1}...")
+
+                    lip_sync_result = await self.call_mcp_tool("lip_sync_video",
+                                                             video_file=video_file,
+                                                             audio_file=tts_filename,
+                                                             output_file=synced_video_filename,
+                                                             start_time=segment["start"],
+                                                             end_time=segment["end"])
+
+                    if "error" in lip_sync_result:
+                        print(f"   ❌ Ошибка синхронизации губ для сегмента {i+1}: {lip_sync_result['error']}")
+                        # Продолжаем без синхронизации
+                        synced_video_filename = None
+
+                    if synced_video_filename:
+                        print(f"   ✅ Синхронизация губ завершена: {synced_video_filename}")
+
                     processed_segments.append({
                         "segment_id": i,
                         "text": segment["text"],
                         "original_text": segment["original_text"],
                         "audio_file": tts_filename,
+                        "synced_video_file": synced_video_filename,
                         "start": segment["start"],
                         "end": segment["end"],
                         "duration": duration,
@@ -374,8 +395,46 @@ class VideoNameReplacer:
                         "changed": False
                     })
 
-            # 6. Создаем финальный результат
-            print("\n6️⃣ СОЗДАНИЕ ФИНАЛЬНОГО РЕЗУЛЬТАТА")
+            # 6. Объединение видео сегментов в финальное видео
+            print("\n6️⃣ ОБЪЕДИНЕНИЕ ВИДЕО СЕГМЕНТОВ")
+            print("-" * 35)
+
+            # Собираем сегменты для замены
+            segments_to_replace = []
+            for segment in processed_segments:
+                if segment.get('synced_video_file'):
+                    segments_to_replace.append({
+                        "start": segment["start"],
+                        "end": segment["end"],
+                        "replacement_video": segment["synced_video_file"]
+                    })
+
+            if segments_to_replace:
+                print(f"   🎬 Заменяем {len(segments_to_replace)} сегментов в оригинальном видео...")
+
+                # Вызываем replace_video_segments
+                replace_result = await self.call_mcp_tool("replace_video_segments",
+                                                        original_video=video_file,
+                                                        segments=segments_to_replace,
+                                                        output_video=output_file)
+
+                if "error" in replace_result:
+                    print(f"   ❌ Ошибка объединения видео сегментов: {replace_result['error']}")
+                    return {"status": "error", "message": f"Ошибка объединения видео сегментов: {replace_result['error']}"}
+
+                print(f"   ✅ Финальное видео создано: {output_file}")
+            else:
+                print("   ⏭️  Нет сегментов для замены, копируем оригинальное видео")
+                # Если нет замен, просто копируем оригинальное видео
+                import shutil
+                original_path = f"videos/{video_file}"
+                output_path = f"videos/{output_file}"
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                shutil.copy2(original_path, output_path)
+                print(f"   ✅ Оригинальное видео скопировано как: {output_file}")
+
+            # 7. Создание финального результата
+            print("\n7️⃣ СОЗДАНИЕ ФИНАЛЬНОГО РЕЗУЛЬТАТА")
             print("-" * 35)
 
             # Создаем подробный отчет
@@ -388,28 +447,40 @@ class VideoNameReplacer:
 
             result_text += f"🎯 ОБРАБОТАННЫЕ СЕГМЕНТЫ:\n"
             tts_generated = 0
+            lip_sync_done = 0
             for i, segment in enumerate(processed_segments):
                 status = "🔄" if segment.get('changed', False) else "⏭️"
                 audio_info = f" | TTS: {segment['audio_file']}" if segment.get('audio_file') else " | Без изменений"
-                result_text += f"   {i+1}. {status} '{segment['text']}' ({segment['start']:.1f}-{segment['end']:.1f}с){audio_info}\n"
+                video_info = f" | Видео: {segment['synced_video_file']}" if segment.get('synced_video_file') else ""
+                result_text += f"   {i+1}. {status} '{segment['text']}' ({segment['start']:.1f}-{segment['end']:.1f}с){audio_info}{video_info}\n"
                 if segment.get('changed', False):
                     tts_generated += 1
+                if segment.get('synced_video_file'):
+                    lip_sync_done += 1
 
-            result_text += f"\n📊 СТАТИСТИКА: Сгенерировано TTS сегментов: {tts_generated}/{len(processed_segments)}\n"
+            result_text += f"\n📊 СТАТИСТИКА:\n"
+            result_text += f"   🎵 Сгенерировано TTS сегментов: {tts_generated}/{len(processed_segments)}\n"
+            result_text += f"   🎬 Синхронизировано видео сегментов: {lip_sync_done}/{len(processed_segments)}\n"
 
-            with open(output_file, 'w', encoding='utf-8') as f:
+            # Сохраняем отчет в текстовый файл
+            report_file = f"report_{os.path.splitext(output_file)[0]}.txt"
+            with open(report_file, 'w', encoding='utf-8') as f:
                 f.write(result_text)
 
-            print(f"✅ Результат сохранен в файл: {output_file}")
+            print(f"✅ Отчет сохранен в файл: {report_file}")
+            print(f"✅ Финальное видео: {output_file}")
 
             return {
                 "status": "success",
-                "output_file": output_file,
+                "output_video": output_file,
+                "report_file": report_file,
                 "original_text": full_text,
                 "replaced_text": replaced_text,
                 "segments_processed": len(replaced_segments),
                 "processed_segments": processed_segments,
-                "message": f"Успешно заменено имя во всем тексте на '{target_name}' с соблюдением падежных форм"
+                "tts_generated": tts_generated,
+                "lip_sync_done": lip_sync_done,
+                "message": f"Успешно заменено имя во всем тексте на '{target_name}' с соблюдением падежных форм. Сгенерировано TTS: {tts_generated}, синхронизировано видео: {lip_sync_done}"
             }
 
         except Exception as e:
@@ -447,9 +518,12 @@ async def main():
         
         if result.get("status") == "success":
             print("✅ Статус: УСПЕШНО")
-            print(f"📄 Выходной файл: {result.get('output_file')}")
+            print(f"🎬 Финальное видео: {result.get('output_video')}")
+            print(f"📄 Отчет: {result.get('report_file')}")
             print(f"🔢 Обработано сегментов: {result.get('segments_processed')}")
-            
+            print(f"🎵 Сгенерировано TTS: {result.get('tts_generated', 0)}")
+            print(f"🎬 Синхронизировано видео: {result.get('lip_sync_done', 0)}")
+
             video_segments = result.get("video_segments", [])
             if video_segments:
                 print(f"🎬 Создано видео сегментов: {len(video_segments)}")

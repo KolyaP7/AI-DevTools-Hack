@@ -10,12 +10,11 @@ from mcp.types import TextContent
 from opentelemetry import trace
 from pydantic import Field
 
-from globals import WAV2LIB_PATH
-from mcp_instance import server as mcp
-from tools.utils import ToolResult, _require_env_vars, format_api_error
+from ..globals import WAV2LIB_PATH, VIDEO_PATH
+from ..mcp_instance import mcp
+from .utils import ToolResult, _require_env_vars, format_api_error
 
-from funcs.video import cut_video, get_audio_duration, change_video_speed
-from globals import VIDEO_PATH
+from ..funcs.video import cut_video, get_audio_duration, change_video_speed
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
 

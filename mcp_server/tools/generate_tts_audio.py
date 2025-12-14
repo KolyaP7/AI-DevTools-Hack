@@ -10,6 +10,7 @@ from pydantic import Field
 
 from ..mcp_instance import mcp
 from .utils import ToolResult
+from ..funcs import video as video_funcs
 # OpenTelemetry tracer
 tracer = trace.get_tracer(__name__)
 
@@ -177,9 +178,9 @@ async def generate_tts_audio(
         ...,
         description="Имя выходного аудиофайла"
     ),
-    original_audio_file: str = Field(
+    sample_video_file: str = Field(
         None,
-        description="Путь к оригинальному аудио файлу для клонирования голоса"
+        description="Путь к оригинальному видео файлу для клонирования голоса"
     ),
     start_time: float = Field(
         None,
@@ -193,10 +194,6 @@ async def generate_tts_audio(
         None,
         description="Целевая длительность аудио в секундах (для контроля скорости речи)"
     ),
-    segments: List[Dict[str, Any]] = Field(
-        None,
-        description="Сегменты с временными метками для генерации в нужные моменты"
-    ),
     ctx: Context = None
 ) -> ToolResult:
     """
@@ -209,7 +206,6 @@ async def generate_tts_audio(
         start_time: Время начала сегмента в секундах
         end_time: Время окончания сегмента в секундах
         duration: Целевая длительность аудио в секундах (для контроля скорости речи)
-        segments: Опционально, сегменты для генерации в конкретные моменты
 
     Returns:
         ToolResult с информацией о сгенерированном аудио.
@@ -240,215 +236,182 @@ async def generate_tts_audio(
             if duration is None and start_time is not None and end_time is not None:
                 duration = end_time - start_time
 
-            # Импорт и инициализация TTS (XTTS v2 или gTTS)
+            # Импорт и инициализация TTS (попытаемся несколько реализаций).
             tts_available = False
             gtts_available = False
+            pyttsx3_available = False
+            system_say_available = False
 
-            # Сначала пробуем gTTS для чистого звука
+            try:
+                import sys
+                if sys.platform == "darwin":
+                    # macOS: используем "say" как самый надёжный локальный генератор
+                    system_say_available = True
+                    if ctx:
+                        await ctx.info("✅ macOS detected: will try `say` for TTS")
+            except Exception:
+                pass
+
+            # Попробуем gTTS (интернет) и pyttsx3 локально
             try:
                 from gtts import gTTS
                 gtts_available = True
                 if ctx:
-                    await ctx.info("✅ gTTS инициализирован для чистого TTS")
-                    await ctx.report_progress(progress=30, total=100)
-            except Exception as e:
+                    await ctx.info("✅ gTTS доступен")
+            except Exception:
                 if ctx:
-                    await ctx.info(f"⚠️ gTTS недоступен: {e}")
-                    await ctx.info("🔄 Пробуем pyttsx3...")
-                # Fallback to pyttsx3
+                    await ctx.info("⚠️ gTTS недоступен")
+
+            try:
+                import pyttsx3
+                pyttsx3_available = True
+                if ctx:
+                    await ctx.info("✅ pyttsx3 доступен")
+            except Exception:
+                if ctx:
+                    await ctx.info("⚠️ pyttsx3 недоступен")
+
+            # Попытка использовать XTTS v2 (локальная модель) — дадим ей приоритет
+            tts = None
+            try:
+                from TTS.api import TTS
+                import torch
+                if ctx:
+                    await ctx.info("🔎 Проверяем наличие XTTS v2 локальной модели...")
                 try:
-                    import pyttsx3
-                    tts = pyttsx3.init()
-                    # Настраиваем для чистоты
-                    voices = tts.getProperty('voices')
-                    # Выбираем чистый голос
-                    clean_voice = None
-                    for voice in voices:
-                        if 'samantha' in voice.name.lower() and 'en_US' in voice.languages:
-                            clean_voice = voice
-                            break
-                        elif 'alex' in voice.name.lower():
-                            clean_voice = voice
-                            break
-
-                    if clean_voice:
-                        tts.setProperty('voice', clean_voice.id)
-                    # Настраиваем для максимальной чистоты
-                    tts.setProperty('rate', 180)  # Чуть быстрее для четкости
-                    tts.setProperty('volume', 1.0)  # Максимальная громкость
-                    pyttsx3_available = True
-                    if ctx:
-                        await ctx.info("✅ pyttsx3 инициализирован с чистым голосом")
-                        await ctx.report_progress(progress=30, total=100)
-                except Exception as e2:
-                    if ctx:
-                        await ctx.info(f"⚠️ pyttsx3 недоступен: {e2}")
-                        await ctx.info("🔄 Пробуем XTTS v2...")
-
-                # Попытка использовать XTTS v2
-                try:
-                    from TTS.api import TTS
-                    import torch
-
-                    if ctx:
-                        await ctx.info("🎯 Инициализация XTTS v2 модели...")
-                        await ctx.report_progress(progress=10, total=100)
-
-                    # Инициализация модели
                     tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
-
-                    # Попытка использовать CUDA, если доступно
-                    if torch.cuda.is_available():
+                    if 'torch' in globals() and torch.cuda.is_available():
                         tts = tts.to("cuda")
-                        if ctx:
-                            await ctx.info("✅ Модель загружена на GPU")
-                    else:
-                        if ctx:
-                            await ctx.info("⚠️ CUDA недоступна, используем CPU")
-
                     tts_available = True
                     if ctx:
-                        await ctx.report_progress(progress=30, total=100)
-
-                except ImportError as e2:
+                        await ctx.info("✅ XTTS v2 локальная модель доступна и инициализирована")
+                except Exception as e:
                     if ctx:
-                        await ctx.info(f"⚠️ XTTS v2 недоступен: {e2}")
-                        await ctx.info("📝 Создание заглушки для TTS аудио")
-                    tts_available = False
-                    pyttsx3_available = False
+                        await ctx.info(f"⚠️ Не удалось инициализировать XTTS модель: {e}")
+                    tts = None
+            except Exception:
+                # TTS.api не установлен
+                if ctx:
+                    await ctx.info("ℹ️ XTTS не установлен локально (TTS.api отсутствует)")
 
-            # Генерация речи с клонированием голоса
+            # Генерация речи — даём приоритет XTTS, затем macOS `say`, затем gTTS, pyttsx3
             if ctx:
                 await ctx.info(f"🎤 Генерация речи для текста: '{text}'")
                 await ctx.report_progress(progress=50, total=100)
 
-            if gtts_available:
-                # Используем gTTS для чистого и четкого звука
-                if ctx:
-                    await ctx.info("🎭 Генерация чистой речи через gTTS")
+            used_method = None
 
-                # Создаем gTTS объект с русским языком для максимальной чистоты и человечности
-                # Используем разные TLD для более естественного голоса
-                tts = gTTS(text=text, lang='ru', slow=False, tld='ru')  # Русский домен для аутентичности
-
-                # Сохраняем в файл
-                tts.save(output_path)
-
-                # Если указан оригинальный аудио файл, применяем простой voice cloning
-                if original_audio_file:
+            # 1) XTTS локально
+            if tts is not None:
+                try:
+                    if sample_video_file:
+                        original_video_path = os.path.join(VIDEO_PATH, sample_video_file)
+                        if not os.path.exists(original_video_path):
+                            raise Exception(f"Оригинальный видео файл не найден: {original_video_path}")
+                        
+                        # Создаём аудиофайл из видео для использования как образец голоса
+                        if ctx:
+                            await ctx.info("🎬 Извлекаем аудио из видео...")
+                        
+                        sample_audio_filename = f"{os.path.splitext(sample_video_file)[0]}_sample.wav"
+                        sample_audio_path = os.path.join(VIDEO_PATH, sample_audio_filename)
+                        
+                        # Используем видео_to_audio для извлечения аудио
+                        try:
+                            video_funcs.video_to_audio(
+                                video_path=original_video_path,
+                                audio_path=sample_audio_path,
+                                audio_format="wav",
+                                bitrate="192k"
+                            )
+                            if ctx:
+                                await ctx.info(f"✅ Аудио извлечено: {sample_audio_filename}")
+                        except Exception as e:
+                            if ctx:
+                                await ctx.info(f"⚠️ Не удалось извлечь аудио из видео: {e}")
+                            raise
+                        
+                        # Используем извлечённый аудиофайл как образец голоса
+                        tts.tts_to_file(text=text, file_path=output_path, speaker_wav=sample_audio_path, language="ru")
+                    else:
+                        tts.tts_to_file(text=text, file_path=output_path, language="ru")
+                    used_method = 'xtts'
                     if ctx:
-                        await ctx.info(f"🎭 Применяем чистый voice cloning к: {original_audio_file}")
+                        await ctx.info("✅ TTS generated via XTTS v2")
+                except Exception as e:
+                    if ctx:
+                        await ctx.info(f"⚠️ XTTS generation failed: {e}")
 
+            # 2) macOS `say` (локально)
+            if used_method is None and system_say_available:
+                try:
+                    import subprocess
+                    temp_aiff = output_path + ".aiff"
+                    subprocess.run(["say", "-o", temp_aiff, text], check=True)
+                    subprocess.run(["ffmpeg", "-y", "-i", temp_aiff, output_path], check=True)
                     try:
-                        # Применяем упрощенный voice cloning для чистоты
-                        await apply_clean_voice_cloning(output_path, original_audio_file, VIDEO_PATH)
-                        if ctx:
-                            await ctx.info("✅ Чистый voice cloning применен")
-                    except Exception as e:
-                        if ctx:
-                            await ctx.info(f"⚠️ Voice cloning не удался: {e}")
-
-                if ctx:
-                    await ctx.info("✅ Чистая речь сгенерирована через gTTS")
-
-            elif pyttsx3_available:
-                # Используем pyttsx3 для генерации речи
-                if ctx:
-                    await ctx.info("🎭 Генерация речи через pyttsx3 с чистым голосом")
-
-                # Генерируем речь в файл
-                tts.save_to_file(text, output_path)
-                tts.runAndWait()
-
-                # Если указан оригинальный аудио файл, применяем voice cloning
-                if original_audio_file:
+                        os.remove(temp_aiff)
+                    except Exception:
+                        pass
+                    used_method = "say"
                     if ctx:
-                        await ctx.info(f"🎭 Применяем voice cloning к: {original_audio_file}")
-
-                    try:
-                        # Применяем чистый voice cloning
-                        await apply_clean_voice_cloning(output_path, original_audio_file, VIDEO_PATH)
-                        if ctx:
-                            await ctx.info("✅ Voice cloning применен")
-                    except Exception as e:
-                        if ctx:
-                            await ctx.info(f"⚠️ Voice cloning не удался: {e}")
-
-                if ctx:
-                    await ctx.info("✅ Речь сгенерирована через pyttsx3")
-
-            elif tts_available:
-                # Если указан оригинальный аудио файл, используем voice cloning
-                if original_audio_file:
-                    original_audio_path = os.path.join(VIDEO_PATH, original_audio_file)
-
-                    if not os.path.exists(original_audio_path):
-                        raise Exception(f"Оригинальный аудио файл не найден: {original_audio_path}")
-
+                        await ctx.info("✅ TTS generated via macOS `say`")
+                except Exception as e:
                     if ctx:
-                        await ctx.info(f"🎭 Клонирование голоса из: {original_audio_file}")
+                        await ctx.info(f"⚠️ macOS say failed: {e}")
 
-                    # Генерация с voice cloning
-                    tts.tts_to_file(
-                        text=text,
-                        file_path=output_path,
-                        speaker_wav=original_audio_path,
-                        language="ru"  # Русский язык
-                    )
-                else:
-                    # Генерация без voice cloning (стандартный голос)
+            # 3) gTTS (онлайн)
+            if used_method is None:
+                try:
+                    from gtts import gTTS
+                    tts_obj = gTTS(text=text, lang='ru', slow=False, tld='ru')
+                    tts_obj.save(output_path)
+                    used_method = 'gtts'
                     if ctx:
-                        await ctx.info("🎭 Генерация со стандартным голосом")
+                        await ctx.info("✅ TTS generated via gTTS")
+                except Exception as e:
+                    if ctx:
+                        await ctx.info(f"⚠️ gTTS not available or failed: {e}")
 
-                    tts.tts_to_file(
-                        text=text,
-                        file_path=output_path,
-                        language="ru"
-                    )
-            else:
-                # Создаем настоящий WAV файл с тишиной нужной длительности
+            # 4) pyttsx3 (локально)
+            if used_method is None:
+                try:
+                    import pyttsx3
+                    tts_engine = pyttsx3.init()
+                    tts_engine.save_to_file(text, output_path)
+                    tts_engine.runAndWait()
+                    used_method = 'pyttsx3'
+                    if ctx:
+                        await ctx.info("✅ TTS generated via pyttsx3")
+                except Exception as e:
+                    if ctx:
+                        await ctx.info(f"⚠️ pyttsx3 not available or failed: {e}")
+
+            # Если ни один метод не сработал — создаём WAV с тишиной как fallback
+            if used_method is None:
                 if ctx:
-                    await ctx.info("🎵 Создание WAV файла с тишиной")
-
+                    await ctx.info("🎵 Ни один TTS не сработал, создаём WAV тишины (fallback)")
                 try:
                     import wave
-
-                    # Параметры WAV файла
-                    sample_rate = 22050  # Hz
-                    num_channels = 1  # Моно
-                    sample_width = 2  # 16 бит
-
-                    # Вычисляем количество сэмплов
+                    sample_rate = 22050
+                    num_channels = 1
+                    sample_width = 2
                     if duration:
                         num_samples = int(sample_rate * duration)
                     else:
-                        # Оценка длительности по количеству символов (примерно 150 символов в минуту)
-                        estimated_duration = max(1.0, len(text) / 25)  # Примерная скорость речи
+                        estimated_duration = max(1.0, len(text) / 25)
                         num_samples = int(sample_rate * estimated_duration)
-
-                    # Создаем WAV файл с тишиной
                     with wave.open(output_path, 'wb') as wav_file:
                         wav_file.setnchannels(num_channels)
                         wav_file.setsampwidth(sample_width)
                         wav_file.setframerate(sample_rate)
-
-                        # Заполняем тишиной (нулевые сэмплы)
                         silence_data = b'\x00\x00' * num_samples
                         wav_file.writeframes(silence_data)
-
                     if ctx:
-                        await ctx.info(f"✅ Создан WAV файл длительностью {num_samples/sample_rate:.1f} секунд")
-
+                        await ctx.info(f"✅ Создан WAV файл длительностью {num_samples/sample_rate:.1f} секунд (silence)")
                 except Exception as e:
-                    # Fallback: создаем текстовый файл
                     if ctx:
-                        await ctx.info(f"📝 Создание текстового файла (ошибка: {e})")
-
-                    with open(output_path, 'w', encoding='utf-8') as f:
-                        f.write(f"# TTS STUB for: {text}\n")
-                        f.write(f"# Duration: {duration or 'unknown'} seconds\n")
-                        if original_audio_file:
-                            f.write(f"# Voice cloned from: {original_audio_file}\n")
+                        await ctx.info(f"📝 Не удалось создать WAV silence fallback: {e}")
 
             if ctx:
                 await ctx.report_progress(progress=80, total=100)
@@ -505,13 +468,35 @@ async def generate_tts_audio(
                 await ctx.report_progress(progress=100, total=100)
                 await ctx.info(f"✅ TTS аудио сгенерировано: {output_file}")
 
+            # CLEANUP: keep only the generated TTS file in its directory
+            try:
+                out_dir = os.path.dirname(output_path)
+                keep_name = os.path.basename(output_path)
+                # Only operate inside the output directory for safety
+                if os.path.isdir(out_dir):
+                    for fname in os.listdir(out_dir):
+                        # skip the file we want to keep
+                        if fname == keep_name:
+                            continue
+                        # remove common audio file types and temp files
+                        lower = fname.lower()
+                        if lower.endswith(('.wav', '.mp3', '.aac', '.m4a', '.aiff', '.flac', '.ogg', '.temp.wav')):
+                            try:
+                                os.remove(os.path.join(out_dir, fname))
+                            except Exception:
+                                # ignore deletion errors
+                                pass
+            except Exception:
+                # don't let cleanup break the tool
+                pass
+
             # Создаем результат
             result = {
                 "output_file": output_file,
                 "text": text,
                 "status": "generated",
                 "duration": duration,
-                "voice_cloning": bool(original_audio_file),  # Voice cloning применяется если указан оригинальный файл
+                "voice_cloning": bool(sample_video_file),  # Voice cloning применяется если указан оригинальный файл
                 "tts_available": tts_available or gtts_available or pyttsx3_available
             }
 

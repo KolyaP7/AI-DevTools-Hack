@@ -51,16 +51,12 @@ def init_tracing():
 init_tracing()
 
 # Импортируем инструменты
-from mcp_server.tools.example_tool import example_tool
 from mcp_server.tools.get_text_from_video import get_text_from_video
-from mcp_server.tools.analyze_and_replace_name import analyze_and_replace_name
-from mcp_server.tools.remove_name_from_phrase import remove_name_from_phrase
+from mcp_server.tools.cut_and_overlay_lips import cut_and_overlay_lips
+from mcp_server.tools.replace_video_segments import replace_video_segments
 from mcp_server.tools.generate_tts_audio import generate_tts_audio
-from mcp_server.tools.extract_audio_from_video import extract_audio_from_video
-from mcp_server.tools.merge_audio import merge_audio
-from mcp_server.tools.lip_sync_video import lip_sync_video
-from mcp_server.tools.combine_video_segments import combine_video_segments
-from mcp_server.tools.enhance_audio_for_transcription import enhance_audio_for_transcription
+
+
 
 # Добавляем промпты (опционально)
 @mcp.prompt()

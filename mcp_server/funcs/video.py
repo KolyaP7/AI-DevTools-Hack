@@ -1,6 +1,6 @@
 import subprocess
 import json
-
+import os
 def cut_video(input_file: str, output_file: str, start: float, end: float):
     """
     Вырезает фрагмент видео из input_file по времени [start, end]
@@ -90,3 +90,38 @@ def change_video_speed(input_file: str, output_file: str,
 
     subprocess.run(command, check=True)
 
+
+
+
+def video_to_audio(
+    video_path: str,
+    audio_path: str,
+    audio_format: str = "mp3",
+    bitrate: str = "192k"
+):
+    """
+    Извлекает аудио из видеофайла с помощью ffmpeg.
+
+    :param video_path: путь к входному видеофайлу
+    :param audio_path: путь к выходному аудиофайлу (без расширения или с ним)
+    :param audio_format: формат аудио (mp3, wav, aac и т.д.)
+    :param bitrate: битрейт аудио (например 128k, 192k)
+    """
+
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(f"Файл не найден: {video_path}")
+
+    if not audio_path.endswith(f".{audio_format}"):
+        audio_path = f"{audio_path}.{audio_format}"
+
+    command = [
+        "ffmpeg",
+        "-y",               # перезаписывать файл без вопроса
+        "-i", video_path,   # входное видео
+        "-vn",              # отключить видео
+        "-ab", bitrate,     # битрейт аудио
+        "-f", audio_format, # формат
+        audio_path
+    ]
+
+    subprocess.run(command, check=True)

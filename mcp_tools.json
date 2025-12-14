@@ -1,28 +1,75 @@
 [
   {
-    "name": "example_tool",
-    "description": "📝 Пример инструмента MCP сервера. Этот инструмент демонстрирует стандартную структуру и использование всех рекомендуемых практик: логирование через Context, прогресс-отчеты, OpenTelemetry трейсинг и обработку ошибок.",
-    "args": [
-      {
-        "name": "query",
-        "type": "string",
-        "description": "Поисковый запрос для обработки"
-      },
-      {
-        "name": "limit",
-        "type": "integer",
-        "description": "Максимальное количество результатов"
-      }
-    ]
-  },
-  {
     "name": "get_text_from_video",
-    "description": "📝 Инструмент для получения текста с временными метками из видео.",
+    "description": "📝 Инструмент для получения текста с временными метками из видео с использованием Whisper.",
     "args": [
       {
         "name": "fileName",
         "type": "string",
         "description": "Имя файла видео"
+      }
+    ]
+  },
+  {
+    "name": "cut_and_overlay_lips",
+    "description": "✂️ Инструмент для вырезания сегментов из видео и наложения губ на каждый сегмент с использованием Wav2Lip.",
+    "args": [
+      {
+        "name": "segments",
+        "type": "array",
+        "description": "Список сегментов для обработки (начало, конец в секундах)"
+      },
+      {
+        "name": "videoPath",
+        "type": "string",
+        "description": "Путь к исходному видео файлу"
+      },
+      {
+        "name": "audioPath",
+        "type": "string",
+        "description": "Путь к аудио файлу для наложения"
+      }
+    ]
+  },
+  {
+    "name": "replace_video_segments",
+    "description": "🔄 Инструмент для замены сегментов видео с использованием ffmpeg.",
+    "args": [
+      {
+        "name": "videoPath",
+        "type": "string",
+        "description": "Путь к исходному видео файлу"
+      },
+      {
+        "name": "replacements",
+        "type": "array",
+        "description": "Список замен сегментов видео"
+      },
+      {
+        "name": "outputPath",
+        "type": "string",
+        "description": "Путь к выходному видео файлу"
+      }
+    ]
+  },
+  {
+    "name": "generate_tts_audio",
+    "description": "🔊 Инструмент для генерации TTS аудио с использованием FastSpeech 2 + Vocoder.",
+    "args": [
+      {
+        "name": "text",
+        "type": "string",
+        "description": "Текст для синтеза речи"
+      },
+      {
+        "name": "language",
+        "type": "string",
+        "description": "Язык синтеза (например, 'ru', 'en')"
+      },
+      {
+        "name": "speaker",
+        "type": "string",
+        "description": "Выбор голоса/спикера"
       }
     ]
   }

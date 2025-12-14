@@ -1,20 +1,34 @@
-# Конфигурация MCP сервера
-id: "mcp-server-example"
-name: "MCP Server Example"
+# Конфигурация MCP сервера для обработки видео
+id: "mcp-server-video-processing"
+name: "MCP Server Video Processing"
 description: |
-  Пример MCP сервера, демонстрирующий стандарт разработки.
-  Включает примеры инструментов с логированием, прогресс-отчетами,
+  MCP сервер для обработки видео с использованием Whisper, Wav2Lip и других инструментов.
+  Включает инструменты для распознавания речи, наложения губ, замены сегментов видео
+  и генерации TTS аудио с логированием, прогресс-отчетами,
   OpenTelemetry трейсингом и обработкой ошибок.
 tools:
-  - name: "example_tool"
-    description: "Пример инструмента MCP сервера с полным набором практик"
-    parameters:
-      query: "string - Поисковый запрос для обработки"
-      limit: "integer - Максимальное количество результатов (по умолчанию: 10)"
   - name: "get_text_from_video"
-    description: "Инструмент для получения текста с временными метками из видео"
+    description: "Инструмент для получения текста с временными метками из видео с использованием Whisper"
     parameters:
       fileName: "string - Имя файла видео"
+  - name: "cut_and_overlay_lips"
+    description: "Инструмент для вырезания сегментов из видео и наложения губ с использованием Wav2Lip"
+    parameters:
+      segments: "array - Список сегментов для обработки"
+      videoPath: "string - Путь к исходному видео файлу"
+      audioPath: "string - Путь к аудио файлу для наложения"
+  - name: "replace_video_segments"
+    description: "Инструмент для замены сегментов видео с использованием ffmpeg"
+    parameters:
+      videoPath: "string - Путь к исходному видео файлу"
+      replacements: "array - Список замен сегментов видео"
+      outputPath: "string - Путь к выходному видео файлу"
+  - name: "generate_tts_audio"
+    description: "Инструмент для генерации TTS аудио с использованием FastSpeech 2 + Vocoder"
+    parameters:
+      text: "string - Текст для синтеза речи"
+      language: "string - Язык синтеза (например, 'ru', 'en')"
+      speaker: "string - Выбор голоса/спикера"
 rawEnvs:
   PORT:
     isRequired: false
